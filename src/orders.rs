@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use chrono::{DateTime, Duration, Utc};
 use crate::{positions::{PositionSide, PositionBidAsk, Position}, order_states::ActiveOrderState};
 
@@ -7,7 +8,7 @@ pub struct Order {
     pub process_id: String,
     pub wallet_id: String,
     pub instument: String,
-    pub invest_amount: f64,
+    pub invested_assets: HashMap<String, f64>,
     pub leverage: f64,
     pub create_date: DateTime<Utc>,
     pub side: PositionSide,
