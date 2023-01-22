@@ -11,7 +11,7 @@ pub struct ActiveOrderState {
     pub open_price: f64,
     pub open_bid_ask: PositionBidAsk,
     pub open_date: DateTime<Utc>,
-    pub last_setlement_fee_date: DateTime<Utc>,
+    pub last_setlement_fee_date: Option<DateTime<Utc>>,
     pub next_setlement_fee_date: Option<DateTime<Utc>>,
     pub pending_order_state: Option<PendingOrderState>,
 }

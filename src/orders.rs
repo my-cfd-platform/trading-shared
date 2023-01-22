@@ -1,6 +1,5 @@
 use chrono::{DateTime, Duration, Utc};
-
-use crate::positions::PositionSide;
+use crate::{positions::{PositionSide, PositionBidAsk, Position}, order_states::ActiveOrderState};
 
 #[derive(Debug, Clone)]
 pub struct Order {
@@ -33,4 +32,20 @@ pub struct AutoClosePositionConfig {
 pub enum AutoClosePositionUnit {
     AssetAmount,
     PriceRate,
+}
+
+impl Order {
+    pub fn open_position(self, bidask: PositionBidAsk) -> Position {    
+        let state = ActiveOrderState {
+            open_price: bidask.get_open_price(self.side.clone()),
+            open_bid_ask: bidask,
+            open_date: Utc::now(),
+            pending_order_state: None,
+            // todo: set settelment fee
+            last_setlement_fee_date: None,
+            next_setlement_fee_date: None,
+        };
+
+        Position::Active(state, self)
+    }
 }
