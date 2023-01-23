@@ -1,6 +1,68 @@
-use crate::positions::Position;
-use std::collections::{BTreeMap, HashMap};
+use crate::positions::{OrderSide, Position, PositionBidAsk};
+use std::{
+    collections::{BTreeMap, HashMap},
+    mem,
+};
 use tokio::sync::RwLock;
+
+pub struct BidAsksCache {
+    bidasks_by_instruments: HashMap<String, PositionBidAsk>,
+}
+
+impl BidAsksCache {
+    pub fn new() -> Self {
+        Self {
+            bidasks_by_instruments: HashMap::with_capacity(200),
+        }
+    }
+
+    pub fn update(&mut self, bidask: PositionBidAsk) {
+        let current_bidask = self.bidasks_by_instruments.get_mut(&bidask.instrument);
+
+        if let Some(current_bidask) = current_bidask {
+            _ = mem::replace(current_bidask, bidask);
+        } else {
+            self.bidasks_by_instruments
+                .insert(bidask.instrument.clone(), bidask);
+        }
+    }
+
+    pub fn get_average_price(&self, instrument: &str) -> Option<f64> {
+        let bidask = self.bidasks_by_instruments.get(instrument);
+
+        if let Some(bidask) = bidask {
+            let price = bidask.ask + bidask.bid / 2.0;
+
+            return Some(price);
+        }
+
+        None
+    }
+
+    pub fn get_close_price(&self, instrument: &str, side: &OrderSide) -> Option<f64> {
+        let bidask = self.bidasks_by_instruments.get(instrument);
+
+        if let Some(bidask) = bidask {
+            let close_price = bidask.get_close_price(side);
+
+            return Some(close_price);
+        }
+
+        None
+    }
+
+    pub fn get_open_price(&self, instrument: &str, side: &OrderSide) -> Option<f64> {
+        let bidask = self.bidasks_by_instruments.get(instrument);
+
+        if let Some(bidask) = bidask {
+            let close_price = bidask.get_open_price(side);
+
+            return Some(close_price);
+        }
+
+        None
+    }
+}
 
 pub struct PositionsCache {
     positions_by_instruments: RwLock<BTreeMap<String, HashMap<String, Position>>>,

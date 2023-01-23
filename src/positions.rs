@@ -14,7 +14,7 @@ pub enum ClosePositionReason {
 }
 
 #[repr(i32)]
-pub enum PositionSide {
+pub enum OrderSide {
     Buy = 0,
     Sell = 1,
 }
@@ -27,17 +27,17 @@ pub struct PositionBidAsk {
 }
 
 impl PositionBidAsk {
-    pub fn get_close_price(&self, side: &PositionSide) -> f64 {
+    pub fn get_close_price(&self, side: &OrderSide) -> f64 {
         match side {
-            PositionSide::Buy => self.bid,
-            PositionSide::Sell => self.ask,
+            OrderSide::Buy => self.bid,
+            OrderSide::Sell => self.ask,
         }
     }
 
-    pub fn get_open_price(&self, side: &PositionSide) -> f64 {
+    pub fn get_open_price(&self, side: &OrderSide) -> f64 {
         match side {
-            PositionSide::Buy => self.ask,
-            PositionSide::Sell => self.bid,
+            OrderSide::Buy => self.ask,
+            OrderSide::Sell => self.bid,
         }
     }
 }
@@ -65,19 +65,49 @@ pub struct OpenedPosition {
 }
 
 impl OpenedPosition {
-    pub fn close(self, bid_ask: PositionBidAsk, reason: ClosePositionReason) -> ClosedPosition {
+    pub fn close(self, bidask: PositionBidAsk, reason: ClosePositionReason) -> ClosedPosition {
         return ClosedPosition {
             close_date: Utc::now(),
-            close_price: bid_ask.get_close_price(&self.order.side),
+            close_price: bidask.get_close_price(&self.order.side),
             close_reason: reason,
             id: self.id.clone(),
-            close_bid_ask: bid_ask,
+            close_bid_ask: bidask,
             order: self.order,
             open_bid_ask: self.open_bid_ask,
             open_date: self.open_date,
             open_price: self.open_price,
             profit: self.profit,
         };
+    }
+
+    pub fn calculate_profit(&self, invest_amount: f64, close_price: f64) -> f64 {
+        let volume = self.order.calculate_volume(invest_amount);
+
+        let profit = match self.order.side {
+            OrderSide::Buy => (close_price / self.open_price - 1.0) * volume,
+            OrderSide::Sell => (close_price / self.open_price - 1.0) * -volume,
+        };
+
+        profit
+    }
+
+    pub fn is_stop_out(&self, invest_amount: f64, profit: f64) -> bool {
+        let margin_percent = self.calculate_margin_percent(invest_amount, profit);
+
+        100.0 - margin_percent >= self.order.stop_out_percent
+    }
+
+    pub fn is_margin_call(&self, invest_amount: f64, profit: f64) -> bool {
+        let margin_percent = self.calculate_margin_percent(invest_amount, profit);
+
+        100.0 - margin_percent >= self.order.margin_call_percent
+    }
+
+    fn calculate_margin_percent(&self, invest_amount: f64, profit: f64) -> f64 {
+        let margin = profit + invest_amount;
+        let margin_percent = margin / invest_amount * 100.0;
+
+        margin_percent
     }
 }
 
