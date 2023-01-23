@@ -1,9 +1,5 @@
 use crate::positions::{OrderSide, Position, PositionBidAsk};
-use std::{
-    collections::{BTreeMap, HashMap},
-    mem,
-};
-use tokio::sync::RwLock;
+use std::{collections::HashMap, mem};
 
 pub struct BidAsksCache {
     bidasks_by_instruments: HashMap<String, PositionBidAsk>,
@@ -65,37 +61,59 @@ impl BidAsksCache {
 }
 
 pub struct PositionsCache {
-    positions_by_instruments: RwLock<BTreeMap<String, HashMap<String, Position>>>,
+    positions_by_wallets: HashMap<String, HashMap<String, Position>>,
 }
 
 impl PositionsCache {
     pub fn new() -> PositionsCache {
         PositionsCache {
-            positions_by_instruments: RwLock::new(BTreeMap::new()),
+            positions_by_wallets: HashMap::new(),
         }
     }
 
-    pub async fn add(&self, position: Position) {
-        match &position {
-            Position::Opened(opened_position) => {
-                let mut positions_by_instruments = self.positions_by_instruments.write().await;
-                let instrument = opened_position.order.instument.clone();
-                let positions = positions_by_instruments.get_mut(&instrument);
+    pub fn add(&mut self, position: Position) {
+        let wallet_positions = self
+            .positions_by_wallets
+            .get_mut(&position.get_order().wallet_id);
+        let position_id = position.get_id();
 
-                match positions {
-                    Some(positions) => {
-                        positions.insert(opened_position.id.clone(), position);
-                    }
-                    None => {
-                        let positions_by_ids =
-                            HashMap::from([(opened_position.id.clone(), position)]);
-                        positions_by_instruments.insert(instrument, positions_by_ids);
-                    }
-                }
+        match wallet_positions {
+            Some(positions) => {
+                positions.insert(position_id.to_owned(), position);
             }
-            // todo: support all types
-            Position::Closed(_) => panic!("Closed position can't be added to cache"),
-            Position::Pending(_) => panic!("Pending position can't be added to cache"),
+            None => {
+                let wallet_id = position.get_order().wallet_id.clone();
+                let positions_by_ids = HashMap::from([(position_id.to_owned(), position)]);
+                self.positions_by_wallets
+                    .insert(wallet_id, positions_by_ids);
+            }
         }
+    }
+
+    pub fn get(&self) -> Vec<&Position> {
+        let positions: Vec<&Position> = self
+            .positions_by_wallets
+            .values()
+            .flat_map(|positions_by_ids| positions_by_ids.values())
+            .collect();
+
+        positions
+    }
+
+    pub fn remove(&mut self, position_id: &str, wallet_id: &str) -> Option<Position> {
+        let wallet_positions = self
+            .positions_by_wallets
+            .get_mut(wallet_id);
+
+        let position = match wallet_positions {
+            Some(positions) => {
+                let postion = positions.remove(position_id);
+
+                postion
+            }
+            None => None,
+        };
+
+        position
     }
 }

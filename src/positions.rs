@@ -48,6 +48,24 @@ pub enum Position {
     Pending(PendingPosition),
 }
 
+impl Position {
+    pub fn get_id(&self) -> &str {
+        match self {
+            Position::Opened(position) => &position.id,
+            Position::Closed(position) => &position.id,
+            Position::Pending(position) => &position.id,
+        }
+    }
+
+    pub fn get_order(&self) -> &Order {
+        match self {
+            Position::Opened(position) => &position.order,
+            Position::Closed(position) => &position.order,
+            Position::Pending(position) => &position.order,
+        }
+    }
+}
+
 pub struct PendingPosition {
     pub id: String,
     pub order: Order,
