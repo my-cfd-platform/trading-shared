@@ -109,8 +109,7 @@ impl Order {
             if let Some(asset_price) = asset_price {
                 let asset_amount = asset_price * invest_amount;
                 amount += asset_amount;
-            }
-            else  {
+            } else {
                 panic!("Not found price for instrument {}", self.instument);
             }
         }
