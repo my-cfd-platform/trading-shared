@@ -1,5 +1,5 @@
 [package]
-name = "trading-shared"
+name = "trading-sdk"
 version = "0.1.0"
 edition = "2021"
 
@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 chrono = "*"
 tokio = { version = "*", features = ["full"] }
+uuid = { version = "*", features = ["v4"] }

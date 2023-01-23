@@ -1,6 +1,5 @@
 pub mod positions;
 pub mod orders;
-pub mod order_states;
 pub mod caches;
 
 #[cfg(test)]

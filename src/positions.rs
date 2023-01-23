@@ -1,10 +1,6 @@
-use crate::{
-    orders::Order,
-    order_states::{ActiveOrderState, ClosedOrderState, PendingOrderState},
-};
+use crate::orders::Order;
 use chrono::{DateTime, Utc};
 
-#[derive(Clone, Debug)]
 #[repr(i32)]
 pub enum ClosePositionReason {
     None = 0,
@@ -17,14 +13,12 @@ pub enum ClosePositionReason {
     InsufficientCollateral = 7,
 }
 
-#[derive(Debug, Clone)]
 #[repr(i32)]
 pub enum PositionSide {
     Buy = 0,
     Sell = 1,
 }
 
-#[derive(Clone, Debug)]
 pub struct PositionBidAsk {
     pub instrument: String,
     pub datetime: DateTime<Utc>,
@@ -33,14 +27,14 @@ pub struct PositionBidAsk {
 }
 
 impl PositionBidAsk {
-    pub fn get_close_price(&self, side: PositionSide) -> f64 {
+    pub fn get_close_price(&self, side: &PositionSide) -> f64 {
         match side {
             PositionSide::Buy => self.bid,
             PositionSide::Sell => self.ask,
         }
     }
 
-    pub fn get_open_price(&self, side: PositionSide) -> f64 {
+    pub fn get_open_price(&self, side: &PositionSide) -> f64 {
         match side {
             PositionSide::Buy => self.ask,
             PositionSide::Sell => self.bid,
@@ -48,9 +42,54 @@ impl PositionBidAsk {
     }
 }
 
-#[derive(Clone, Debug)]
 pub enum Position {
-    Active(ActiveOrderState, Order),
-    Closed(ClosedOrderState, Order),
-    Pending(PendingOrderState, Order),
+    Opened(OpenedPosition),
+    Closed(ClosedPosition),
+    Pending(PendingPosition),
+}
+
+pub struct PendingPosition {
+    pub id: String,
+    pub order: Order,
+}
+
+pub struct OpenedPosition {
+    pub id: String,
+    pub order: Order,
+    pub open_price: f64,
+    pub open_bid_ask: PositionBidAsk,
+    pub open_date: DateTime<Utc>,
+    pub last_setlement_fee_date: Option<DateTime<Utc>>,
+    pub next_setlement_fee_date: Option<DateTime<Utc>>,
+    pub profit: f64,
+}
+
+impl OpenedPosition {
+    pub fn close(self, bid_ask: PositionBidAsk, reason: ClosePositionReason) -> ClosedPosition {
+        return ClosedPosition {
+            close_date: Utc::now(),
+            close_price: bid_ask.get_close_price(&self.order.side),
+            close_reason: reason,
+            id: self.id.clone(),
+            close_bid_ask: bid_ask,
+            order: self.order,
+            open_bid_ask: self.open_bid_ask,
+            open_date: self.open_date,
+            open_price: self.open_price,
+            profit: self.profit,
+        };
+    }
+}
+
+pub struct ClosedPosition {
+    pub id: String,
+    pub order: Order,
+    pub open_price: f64,
+    pub open_bid_ask: PositionBidAsk,
+    pub open_date: DateTime<Utc>,
+    pub close_bid_ask: PositionBidAsk,
+    pub close_price: f64,
+    pub close_date: DateTime<Utc>,
+    pub close_reason: ClosePositionReason,
+    pub profit: f64,
 }

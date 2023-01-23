@@ -1,34 +1,33 @@
-use std::collections::HashMap;
+use crate::positions::{
+    OpenedPosition, PendingPosition, Position, PositionBidAsk, PositionSide,
+};
 use chrono::{DateTime, Duration, Utc};
-use crate::{positions::{PositionSide, PositionBidAsk, Position}, order_states::ActiveOrderState};
+use std::{collections::HashMap};
+use uuid::Uuid;
 
-#[derive(Debug, Clone)]
 pub struct Order {
-    pub id: String,
+    pub order_id: String,
     pub process_id: String,
     pub wallet_id: String,
     pub instument: String,
-    pub invested_assets: HashMap<String, f64>,
+    pub invest_assets: HashMap<String, f64>,
     pub leverage: f64,
-    pub create_date: DateTime<Utc>,
+    pub created_date: DateTime<Utc>,
     pub side: PositionSide,
     pub take_profit: Option<AutoClosePositionConfig>,
     pub stop_loss: Option<AutoClosePositionConfig>,
-    pub last_update_date: DateTime<Utc>,
     pub stop_out_percent: f64,
     pub margin_call_percent: f64,
-    pub top_up_percent: f64,
-    pub top_up_enabled: f64,
-    pub setlement_fee_period: Option<Duration>,
+    pub top_up_percent: Option<f64>,
+    pub funding_fee_period: Option<Duration>,
+    pub desired_price: Option<f64>,
 }
 
-#[derive(Debug, Clone)]
 pub struct AutoClosePositionConfig {
     pub value: f64,
     pub unit: AutoClosePositionUnit,
 }
 
-#[derive(Debug, Clone)]
 #[repr(i32)]
 pub enum AutoClosePositionUnit {
     AssetAmount,
@@ -36,17 +35,28 @@ pub enum AutoClosePositionUnit {
 }
 
 impl Order {
-    pub fn open_position(self, bidask: PositionBidAsk) -> Position {    
-        let state = ActiveOrderState {
-            open_price: bidask.get_open_price(self.side.clone()),
+    pub fn open(self, bidask: PositionBidAsk) -> Position {
+        let id = Uuid::new_v4().to_string();
+
+        if let Some(_desired_price) = self.desired_price {
+            return Position::Pending(PendingPosition {
+                id: id,
+                order: self,
+            });
+        }
+
+        let position = OpenedPosition {
+            id: id,
+            open_price: bidask.get_open_price(&self.side),
             open_bid_ask: bidask,
             open_date: Utc::now(),
-            pending_order_state: None,
+            order: self,
+            profit: 0.0,
             // todo: set settelment fee
             last_setlement_fee_date: None,
             next_setlement_fee_date: None,
         };
 
-        Position::Active(state, self)
+        Position::Opened(position)
     }
 }
