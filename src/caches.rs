@@ -100,6 +100,18 @@ impl PositionsCache {
         positions
     }
 
+    pub fn find(&self, wallet_id: &str, position_id: &str) -> Option<&Position> {
+        let wallet_positions = self.positions_by_wallets.get(wallet_id);
+
+        if let Some(wallet_positions) = wallet_positions {
+            let position = wallet_positions.get(position_id);
+
+            return position;
+        }
+
+        None
+    }
+
     pub fn remove(&mut self, position_id: &str, wallet_id: &str) -> Option<Position> {
         let wallet_positions = self
             .positions_by_wallets
