@@ -5,6 +5,7 @@ use crate::{
 use chrono::{DateTime, Duration, Utc};
 use std::collections::HashMap;
 use uuid::Uuid;
+use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 pub struct Order {
     pub order_id: String,
@@ -25,6 +26,7 @@ pub struct Order {
     pub desired_price: Option<f64>,
 }
 
+#[derive(IntoPrimitive, TryFromPrimitive,)]
 #[repr(i32)]
 pub enum OrderSide {
     Buy = 0,
@@ -73,6 +75,7 @@ impl StopLossConfig {
     }
 }
 
+#[derive(IntoPrimitive, TryFromPrimitive,)]
 #[repr(i32)]
 pub enum AutoClosePositionUnit {
     AssetAmount,
