@@ -1,6 +1,4 @@
-use crate::{
-    positions::{OpenedPosition, PendingPosition, Position, PositionBidAsk},
-};
+use crate::positions::{OpenedPosition, PendingPosition, Position, PositionBidAsk, PositionCalculator};
 use chrono::{DateTime, Duration, Utc};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use std::collections::HashMap;
@@ -11,7 +9,7 @@ pub struct Order {
     pub process_id: String,
     pub wallet_id: String,
     pub instrument: String,
-    pub base_assets: String,
+    pub base_asset: String,
     pub invest_assets: HashMap<String, f64>,
     pub leverage: f64,
     pub created_date: DateTime<Utc>,
@@ -87,32 +85,51 @@ impl Order {
         Uuid::new_v4().to_string()
     }
 
-    pub fn open(self, bidask: PositionBidAsk) -> Position {
+    pub fn open(self, calculator: PositionCalculator) -> Position {
+        let open_price = calculator.get_open_price(&self.instrument, &self.side);
+
         if let Some(desired_price) = self.desired_price {
-            if bidask.get_open_price(&self.side) >= desired_price {
-                return Position::Opened(self.into_opened(bidask));
+            if open_price >= desired_price {
+                return Position::Opened(self.into_opened(calculator));
             }
 
             return Position::Pending(self.into_pending());
         }
 
-        Position::Opened(self.into_opened(bidask))
+        Position::Opened(self.into_opened(calculator))
     }
 
     pub fn calculate_volume(&self, invest_amount: f64) -> f64 {
         invest_amount * self.leverage
     }
 
-    fn into_opened(self, bidask: PositionBidAsk) -> OpenedPosition {
+    pub fn calculate_invest_amount(
+        &self,
+        bidasks_by_instruments: &HashMap<String, PositionBidAsk>,
+    ) -> f64 {
+        let mut amount = 0.0;
+
+        for (invest_asset, invest_amount) in self.invest_assets.iter() {
+            // todo: generate by instrument model
+            let instrument = format!("{}{}", invest_asset, self.base_asset);
+            let bidask = bidasks_by_instruments
+                .get(&instrument)
+                .expect(&format!("BidAsk not found for {}", self.instrument));
+            let asset_price = bidask.ask + bidask.bid / 2.0;
+            let asset_amount = asset_price * invest_amount;
+            amount += asset_amount;
+        }
+
+        amount
+    }
+
+    fn into_opened(self, calculator: PositionCalculator) -> OpenedPosition {
         OpenedPosition {
             id: Position::generate_id(),
-            open_price: bidask.get_open_price(&self.side),
-            open_bid_ask: bidask,
+            open_price: calculator.get_open_price(&self.instrument, &self.side),
             open_date: Utc::now(),
             order: self,
-            // todo: set settelment fee
-            last_setlement_fee_date: None,
-            next_setlement_fee_date: None,
+            open_bidasks: calculator.take_bidasks(),
         }
     }
 

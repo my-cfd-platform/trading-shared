@@ -72,8 +72,9 @@ impl BidAsksCache {
         &self,
         base_asset: &str,
         amounts_by_assets: &HashMap<String, f64>,
-    ) -> f64 {
+    ) -> (f64, HashMap<String, f64>) {
         let mut estimated_amount = 0.0;
+        let mut prices = HashMap::with_capacity(amounts_by_assets.len());
 
         for (asset, amount) in amounts_by_assets.iter() {
             if asset == base_asset {
@@ -85,6 +86,7 @@ impl BidAsksCache {
             let asset_price = self.get_average_price(&instrument);
 
             if let Some(asset_price) = asset_price {
+                prices.insert(asset.to_owned(), asset_price);
                 let asset_amount = asset_price * amount;
                 estimated_amount += asset_amount;
             } else {
@@ -95,7 +97,7 @@ impl BidAsksCache {
             }
         }
 
-        estimated_amount
+        (estimated_amount, prices)
     }
 }
 
