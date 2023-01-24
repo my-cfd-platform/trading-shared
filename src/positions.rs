@@ -26,6 +26,12 @@ pub struct PositionBidAsk {
 }
 
 impl PositionBidAsk {
+    pub fn generate_id(base_asset: &str, quote_asset: &str) -> String {
+        let id = format!("{}{}", base_asset, quote_asset); // todo: find better solution
+
+        id
+    }
+
     pub fn get_close_price(&self, side: &OrderSide) -> f64 {
         match side {
             OrderSide::Buy => self.bid,
@@ -97,14 +103,16 @@ impl OpenedPosition {
 
         let position = match position {
             Position::Opened(position) => position,
-            _ => panic!("Imposible")
+            _ => panic!("Imposible"),
         };
-        let invested_amount = calculator.calculate_invest_amount(&position.order.invest_assets, &position.order.base_asset);
-        let close_price = calculator.get_close_price(&position.order.instrument, &position.order.side);
+        let invested_amount = calculator
+            .calculate_invest_amount(&position.order.invest_assets, &position.order.base_asset);
+        let close_price =
+            calculator.get_close_price(&position.order.instrument, &position.order.side);
 
         return ClosedPosition {
             close_date: Utc::now(),
-            close_price: close_price,
+            close_price,
             close_reason: reason,
             id: position.id.clone(),
             open_date: position.open_date,
@@ -223,12 +231,15 @@ impl PositionCalculator {
         return price;
     }
 
-    pub fn calculate_invest_amount(&self, invest_assets: &HashMap<String, f64>, base_asset: &str) -> f64 {
+    pub fn calculate_invest_amount(
+        &self,
+        invest_assets: &HashMap<String, f64>,
+        base_asset: &str,
+    ) -> f64 {
         let mut amount = 0.0;
 
         for (invest_asset, invest_amount) in invest_assets.iter() {
-            // todo: generate by instrument model
-            let instrument = format!("{}{}", invest_asset, base_asset);
+            let instrument = PositionBidAsk::generate_id(invest_asset, base_asset);
             let bidask = self
                 .bidasks
                 .get(&instrument)

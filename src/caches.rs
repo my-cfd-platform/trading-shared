@@ -1,5 +1,4 @@
 use crate::{
-    orders::OrderSide,
     positions::{Position, PositionBidAsk},
 };
 use std::{collections::HashMap, mem};
@@ -9,9 +8,9 @@ pub struct BidAsksCache {
 }
 
 impl BidAsksCache {
-    pub fn new() -> Self {
+    pub fn new(bidasks_by_instruments: HashMap<String, PositionBidAsk>) -> Self {
         Self {
-            bidasks_by_instruments: HashMap::with_capacity(200),
+            bidasks_by_instruments,
         }
     }
 
@@ -26,79 +25,28 @@ impl BidAsksCache {
         }
     }
 
-    pub fn get_average_price(&self, instrument: &str) -> Option<f64> {
-        let bidask = self.bidasks_by_instruments.get(instrument);
-
-        if let Some(bidask) = bidask {
-            let price = bidask.ask + bidask.bid / 2.0;
-
-            return Some(price);
-        }
-
-        None
-    }
-
-    pub fn get_close_price(&self, instrument: &str, side: &OrderSide) -> Option<f64> {
-        let bidask = self.bidasks_by_instruments.get(instrument);
-
-        if let Some(bidask) = bidask {
-            let close_price = bidask.get_close_price(side);
-
-            return Some(close_price);
-        }
-
-        None
-    }
-
-    pub fn get_open_price(&self, instrument: &str, side: &OrderSide) -> Option<f64> {
-        let bidask = self.bidasks_by_instruments.get(instrument);
-
-        if let Some(bidask) = bidask {
-            let close_price = bidask.get_open_price(side);
-
-            return Some(close_price);
-        }
-
-        None
-    }
-
-    pub fn get(&self, instrument: &str) -> Option<&PositionBidAsk> {
+    pub fn find(&self, instrument: &str) -> Option<&PositionBidAsk> {
         let bidask = self.bidasks_by_instruments.get(instrument);
 
         return bidask;
     }
 
-    pub fn estimate_amount(
-        &self,
-        base_asset: &str,
-        amounts_by_assets: &HashMap<String, f64>,
-    ) -> (f64, HashMap<String, f64>) {
-        let mut estimated_amount = 0.0;
-        let mut prices = HashMap::with_capacity(amounts_by_assets.len());
+    pub fn get(&self, base_asset: &str, assets: &Vec<String>) -> HashMap<String, PositionBidAsk> {
+        let mut bidasks = HashMap::with_capacity(assets.len());
 
-        for (asset, amount) in amounts_by_assets.iter() {
-            if asset == base_asset {
-                estimated_amount += amount;
+        for asset in assets.iter() {
+            let instrument = PositionBidAsk::generate_id(asset, base_asset);
+            let bidask = self.bidasks_by_instruments.get(&instrument);
+
+            if let Some(bidask) = bidask {
+                bidasks.insert(instrument, bidask.clone());
             }
 
-            // todo: generate by instrument model
-            let instrument = format!("{}{}", asset, base_asset);
-            let asset_price = self.get_average_price(&instrument);
-
-            if let Some(asset_price) = asset_price {
-                prices.insert(asset.to_owned(), asset_price);
-                let asset_amount = asset_price * amount;
-                estimated_amount += asset_amount;
-            } else {
-                panic!(
-                    "Failed to estimate_amount: price not found for instrument {}",
-                    instrument
-                );
-            }
         }
 
-        (estimated_amount, prices)
+        return bidasks;
     }
+
 }
 
 pub struct PositionsCache {
