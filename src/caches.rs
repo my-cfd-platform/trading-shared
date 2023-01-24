@@ -31,7 +31,7 @@ impl BidAsksCache {
         return bidask;
     }
 
-    pub fn get(&self, base_asset: &str, assets: &Vec<String>) -> HashMap<String, PositionBidAsk> {
+    pub fn get(&self, base_asset: &str, assets: &[&String]) -> HashMap<String, PositionBidAsk> {
         let mut bidasks = HashMap::with_capacity(assets.len());
 
         for asset in assets.iter() {
