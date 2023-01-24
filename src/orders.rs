@@ -11,7 +11,7 @@ pub struct Order {
     pub id: String,
     pub process_id: String,
     pub wallet_id: String,
-    pub instument: String,
+    pub instrument: String,
     pub base_assets: String,
     pub invest_assets: HashMap<String, f64>,
     pub leverage: f64,
@@ -123,7 +123,7 @@ impl Order {
                 let asset_amount = asset_price * invest_amount;
                 amount += asset_amount;
             } else {
-                panic!("Not found price for instrument {}", self.instument);
+                panic!("Not found price for instrument {}", self.instrument);
             }
         }
 
