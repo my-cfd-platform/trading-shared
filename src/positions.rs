@@ -70,6 +70,7 @@ impl Position {
 pub struct PendingPosition {
     pub id: String,
     pub order: Order,
+    pub create_date: DateTime<Utc>,
 }
 
 pub struct OpenedPosition {
@@ -80,7 +81,6 @@ pub struct OpenedPosition {
     pub open_date: DateTime<Utc>,
     pub last_setlement_fee_date: Option<DateTime<Utc>>,
     pub next_setlement_fee_date: Option<DateTime<Utc>>,
-    pub profit: f64,
 }
 
 impl OpenedPosition {
@@ -95,7 +95,6 @@ impl OpenedPosition {
             open_bid_ask: self.open_bid_ask,
             open_date: self.open_date,
             open_price: self.open_price,
-            profit: self.profit,
         };
     }
 
@@ -140,5 +139,4 @@ pub struct ClosedPosition {
     pub close_price: f64,
     pub close_date: DateTime<Utc>,
     pub close_reason: ClosePositionReason,
-    pub profit: f64,
 }

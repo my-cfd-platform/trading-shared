@@ -3,9 +3,9 @@ use crate::{
     positions::{OpenedPosition, PendingPosition, Position, PositionBidAsk},
 };
 use chrono::{DateTime, Duration, Utc};
+use num_enum::{IntoPrimitive, TryFromPrimitive};
 use std::collections::HashMap;
 use uuid::Uuid;
-use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 pub struct Order {
     pub id: String,
@@ -26,7 +26,7 @@ pub struct Order {
     pub desired_price: Option<f64>,
 }
 
-#[derive(IntoPrimitive, TryFromPrimitive,)]
+#[derive(IntoPrimitive, TryFromPrimitive)]
 #[repr(i32)]
 pub enum OrderSide {
     Buy = 0,
@@ -75,7 +75,7 @@ impl StopLossConfig {
     }
 }
 
-#[derive(IntoPrimitive, TryFromPrimitive,)]
+#[derive(IntoPrimitive, TryFromPrimitive)]
 #[repr(i32)]
 pub enum AutoClosePositionUnit {
     AssetAmount,
@@ -88,28 +88,15 @@ impl Order {
     }
 
     pub fn open(self, bidask: PositionBidAsk) -> Position {
-        let position_id = Position::generate_id();
+        if let Some(desired_price) = self.desired_price {
+            if bidask.get_open_price(&self.side) >= desired_price {
+                return Position::Opened(self.into_opened(bidask));
+            }
 
-        if let Some(_desired_price) = self.desired_price {
-            return Position::Pending(PendingPosition {
-                id: position_id,
-                order: self,
-            });
+            return Position::Pending(self.into_pending());
         }
 
-        let position = OpenedPosition {
-            id: position_id,
-            open_price: bidask.get_open_price(&self.side),
-            open_bid_ask: bidask,
-            open_date: Utc::now(),
-            order: self,
-            profit: 0.0,
-            // todo: set settelment fee
-            last_setlement_fee_date: None,
-            next_setlement_fee_date: None,
-        };
-
-        Position::Opened(position)
+        Position::Opened(self.into_opened(bidask))
     }
 
     pub fn calculate_invest_amount(&self, prices: &BidAsksCache) -> f64 {
@@ -132,5 +119,26 @@ impl Order {
 
     pub fn calculate_volume(&self, invest_amount: f64) -> f64 {
         invest_amount * self.leverage
+    }
+
+    fn into_opened(self, bidask: PositionBidAsk) -> OpenedPosition {
+        OpenedPosition {
+            id: Position::generate_id(),
+            open_price: bidask.get_open_price(&self.side),
+            open_bid_ask: bidask,
+            open_date: Utc::now(),
+            order: self,
+            // todo: set settelment fee
+            last_setlement_fee_date: None,
+            next_setlement_fee_date: None,
+        }
+    }
+
+    fn into_pending(self) -> PendingPosition {
+        PendingPosition {
+            id: Position::generate_id(),
+            order: self,
+            create_date: Utc::now(),
+        }
     }
 }
