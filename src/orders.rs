@@ -8,7 +8,7 @@ use uuid::Uuid;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 pub struct Order {
-    pub order_id: String,
+    pub id: String,
     pub process_id: String,
     pub wallet_id: String,
     pub instument: String,
@@ -83,18 +83,22 @@ pub enum AutoClosePositionUnit {
 }
 
 impl Order {
+    pub fn generate_id() -> String {
+        Uuid::new_v4().to_string()
+    }
+
     pub fn open(self, bidask: PositionBidAsk) -> Position {
-        let id = Uuid::new_v4().to_string();
+        let position_id = Position::generate_id();
 
         if let Some(_desired_price) = self.desired_price {
             return Position::Pending(PendingPosition {
-                id: id,
+                id: position_id,
                 order: self,
             });
         }
 
         let position = OpenedPosition {
-            id: id,
+            id: position_id,
             open_price: bidask.get_open_price(&self.side),
             open_bid_ask: bidask,
             open_date: Utc::now(),

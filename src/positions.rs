@@ -1,6 +1,7 @@
 use crate::orders::{Order, OrderSide};
 use chrono::{DateTime, Utc};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
+use uuid::Uuid;
 
 #[derive(IntoPrimitive, TryFromPrimitive,)]
 #[repr(i32)]
@@ -44,6 +45,10 @@ pub enum Position {
 }
 
 impl Position {
+    pub fn generate_id() -> String {
+        Uuid::new_v4().to_string()
+    }
+
     pub fn get_id(&self) -> &str {
         match self {
             Position::Opened(position) => &position.id,
