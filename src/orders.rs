@@ -26,7 +26,7 @@ pub struct Order {
     pub desired_price: Option<f64>,
 }
 
-#[derive(IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, IntoPrimitive, TryFromPrimitive)]
 #[repr(i32)]
 pub enum OrderSide {
     Buy = 0,

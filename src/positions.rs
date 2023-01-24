@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use uuid::Uuid;
 
-#[derive(IntoPrimitive, TryFromPrimitive,)]
+#[derive(Clone, IntoPrimitive, TryFromPrimitive,)]
 #[repr(i32)]
 pub enum ClosePositionReason {
     ClientCommand = 0,
