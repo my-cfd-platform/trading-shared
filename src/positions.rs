@@ -15,6 +15,7 @@ pub enum ClosePositionReason {
     InsufficientCollateral = 6,
 }
 
+#[derive(Clone)]
 pub struct PositionBidAsk {
     pub instrument: String,
     pub datetime: DateTime<Utc>,
