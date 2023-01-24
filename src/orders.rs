@@ -1,5 +1,4 @@
 use crate::{
-    caches::BidAsksCache,
     positions::{OpenedPosition, PendingPosition, Position, PositionBidAsk},
 };
 use chrono::{DateTime, Duration, Utc};
@@ -98,24 +97,6 @@ impl Order {
         }
 
         Position::Opened(self.into_opened(bidask))
-    }
-
-    pub fn calculate_invest_amount(&self, prices: &BidAsksCache) -> f64 {
-        let mut amount = 0.0;
-
-        for (invest_asset, invest_amount) in self.invest_assets.iter() {
-            let instrument = format!("{}{}", invest_asset, self.base_assets); // todo: generate by instrument model
-            let asset_price = prices.get_average_price(&instrument);
-
-            if let Some(asset_price) = asset_price {
-                let asset_amount = asset_price * invest_amount;
-                amount += asset_amount;
-            } else {
-                panic!("Not found price for instrument {}", self.instrument);
-            }
-        }
-
-        amount
     }
 
     pub fn calculate_volume(&self, invest_amount: f64) -> f64 {

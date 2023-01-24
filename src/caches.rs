@@ -1,4 +1,7 @@
-use crate::{positions::{Position, PositionBidAsk}, orders::OrderSide};
+use crate::{
+    orders::OrderSide,
+    positions::{Position, PositionBidAsk},
+};
 use std::{collections::HashMap, mem};
 
 pub struct BidAsksCache {
@@ -64,6 +67,36 @@ impl BidAsksCache {
 
         return bidask;
     }
+
+    pub fn estimate_amount(
+        &self,
+        base_asset: &str,
+        amounts_by_assets: &HashMap<String, f64>,
+    ) -> f64 {
+        let mut estimated_amount = 0.0;
+
+        for (asset, amount) in amounts_by_assets.iter() {
+            if asset == base_asset {
+                estimated_amount += amount;
+            }
+
+            // todo: generate by instrument model
+            let instrument = format!("{}{}", asset, base_asset);
+            let asset_price = self.get_average_price(&instrument);
+
+            if let Some(asset_price) = asset_price {
+                let asset_amount = asset_price * amount;
+                estimated_amount += asset_amount;
+            } else {
+                panic!(
+                    "Failed to estimate_amount: price not found for instrument {}",
+                    instrument
+                );
+            }
+        }
+
+        estimated_amount
+    }
 }
 
 pub struct PositionsCache {
@@ -119,9 +152,7 @@ impl PositionsCache {
     }
 
     pub fn remove(&mut self, position_id: &str, wallet_id: &str) -> Option<Position> {
-        let wallet_positions = self
-            .positions_by_wallets
-            .get_mut(wallet_id);
+        let wallet_positions = self.positions_by_wallets.get_mut(wallet_id);
 
         let position = match wallet_positions {
             Some(positions) => {
