@@ -32,7 +32,7 @@ pub enum OrderSide {
     Buy = 0,
     Sell = 1,
 }
-
+#[derive(Clone)]
 pub struct TakeProfitConfig {
     pub value: f64,
     pub unit: AutoClosePositionUnit,
@@ -54,6 +54,7 @@ impl TakeProfitConfig {
     }
 }
 
+#[derive(Clone)]
 pub struct StopLossConfig {
     pub value: f64,
     pub unit: AutoClosePositionUnit,
@@ -75,7 +76,7 @@ impl StopLossConfig {
     }
 }
 
-#[derive(IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, IntoPrimitive, TryFromPrimitive)]
 #[repr(i32)]
 pub enum AutoClosePositionUnit {
     AssetAmount,
