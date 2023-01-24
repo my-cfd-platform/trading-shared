@@ -1,22 +1,17 @@
-use crate::orders::Order;
+use crate::orders::{Order, OrderSide};
 use chrono::{DateTime, Utc};
+use num_enum::{IntoPrimitive, TryFromPrimitive};
 
+#[derive(IntoPrimitive, TryFromPrimitive,)]
 #[repr(i32)]
 pub enum ClosePositionReason {
-    None = 0,
-    ClientCommand = 1,
-    StopOut = 2,
-    TakeProfit = 3,
-    StopLoss = 4,
-    Canceled = 5,
-    AdminAction = 6,
-    InsufficientCollateral = 7,
-}
-
-#[repr(i32)]
-pub enum OrderSide {
-    Buy = 0,
-    Sell = 1,
+    ClientCommand = 0,
+    StopOut = 1,
+    TakeProfit = 2,
+    StopLoss = 3,
+    Canceled = 4,
+    AdminAction = 5,
+    InsufficientCollateral = 6,
 }
 
 pub struct PositionBidAsk {

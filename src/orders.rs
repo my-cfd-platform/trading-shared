@@ -1,6 +1,6 @@
 use crate::{
     caches::BidAsksCache,
-    positions::{OpenedPosition, OrderSide, PendingPosition, Position, PositionBidAsk},
+    positions::{OpenedPosition, PendingPosition, Position, PositionBidAsk},
 };
 use chrono::{DateTime, Duration, Utc};
 use std::collections::HashMap;
@@ -23,6 +23,12 @@ pub struct Order {
     pub top_up_percent: Option<f64>,
     pub funding_fee_period: Option<Duration>,
     pub desired_price: Option<f64>,
+}
+
+#[repr(i32)]
+pub enum OrderSide {
+    Buy = 0,
+    Sell = 1,
 }
 
 pub struct TakeProfitConfig {

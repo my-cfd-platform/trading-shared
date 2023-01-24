@@ -1,4 +1,4 @@
-use crate::positions::{OrderSide, Position, PositionBidAsk};
+use crate::{positions::{Position, PositionBidAsk}, orders::OrderSide};
 use std::{collections::HashMap, mem};
 
 pub struct BidAsksCache {
