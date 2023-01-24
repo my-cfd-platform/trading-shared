@@ -58,6 +58,12 @@ impl BidAsksCache {
 
         None
     }
+
+    pub fn get(&self, instrument: &str) -> Option<&PositionBidAsk> {
+        let bidask = self.bidasks_by_instruments.get(instrument);
+
+        return bidask;
+    }
 }
 
 pub struct PositionsCache {
