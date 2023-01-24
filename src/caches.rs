@@ -79,17 +79,7 @@ impl PositionsCache {
         }
     }
 
-    pub fn get(&self) -> Vec<&Position> {
-        let positions: Vec<&Position> = self
-            .positions_by_wallets
-            .values()
-            .flat_map(|positions_by_ids| positions_by_ids.values())
-            .collect();
-
-        positions
-    }
-
-    pub fn find(&self, wallet_id: &str, position_id: &str) -> Option<&Position> {
+    pub fn find_by_id(&self, wallet_id: &str, position_id: &str) -> Option<&Position> {
         let wallet_positions = self.positions_by_wallets.get(wallet_id);
 
         if let Some(wallet_positions) = wallet_positions {
@@ -99,6 +89,16 @@ impl PositionsCache {
         }
 
         None
+    }
+
+    pub fn find_by_wallet_id(&self, wallet_id: &str) -> Vec<&Position> {
+        let wallet_positions = self.positions_by_wallets.get(wallet_id);
+
+        if let Some(wallet_positions) = wallet_positions {
+            return wallet_positions.values().collect();
+        }
+
+        Vec::new()
     }
 
     pub fn remove(&mut self, position_id: &str, wallet_id: &str) -> Option<Position> {
