@@ -95,6 +95,7 @@ impl OpenedPosition {
             open_bid_ask: self.open_bid_ask,
             open_date: self.open_date,
             open_price: self.open_price,
+            profit: 0.0,
         };
     }
 
@@ -139,4 +140,5 @@ pub struct ClosedPosition {
     pub close_price: f64,
     pub close_date: DateTime<Utc>,
     pub close_reason: ClosePositionReason,
+    pub profit: f64,
 }
