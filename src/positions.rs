@@ -71,6 +71,14 @@ impl Position {
             Position::Pending(position) => &position.order,
         }
     }
+
+    pub fn get_order_mut(&mut self) -> &mut Order {
+        match self {
+            Position::Opened(position) => &mut position.order,
+            Position::Closed(position) => &mut position.order,
+            Position::Pending(position) => &mut position.order,
+        }
+    }
 }
 
 pub struct PendingPosition {
