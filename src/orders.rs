@@ -9,7 +9,7 @@ pub struct Order {
     pub process_id: String,
     pub wallet_id: String,
     pub instrument: String,
-    pub base_asset: String,
+    pub pnl_asset: String,
     pub invest_assets: HashMap<String, f64>,
     pub leverage: f64,
     pub created_date: DateTime<Utc>,
@@ -111,7 +111,7 @@ impl Order {
 
         for (invest_asset, invest_amount) in self.invest_assets.iter() {
             // todo: generate by instrument model
-            let instrument = format!("{}{}", invest_asset, self.base_asset);
+            let instrument = format!("{}{}", invest_asset, self.pnl_asset);
             let bidask = bidasks_by_instruments
                 .get(&instrument)
                 .expect(&format!("BidAsk not found for {}", self.instrument));
@@ -128,7 +128,7 @@ impl Order {
             id: Position::generate_id(),
             open_price: calculator.get_open_price(&self.instrument, &self.side),
             open_date: Utc::now(),
-            open_invest_amount: calculator.calculate_invest_amount(&self.invest_assets, &self.base_asset),
+            open_invest_amount: calculator.calculate_invest_amount(&self.invest_assets, &self.pnl_asset),
             order: self,
             open_bidasks: calculator.take_bidasks(),
         }
@@ -157,7 +157,7 @@ impl OrderCalculator {
 
         for (asset, _amount) in order.invest_assets.iter() {
             // todo: generate by instrument model
-            let instrument = format!("{}{}", asset, order.base_asset);
+            let instrument = format!("{}{}", asset, order.pnl_asset);
             let _bidask = bidasks
                 .get(&instrument)
                 .expect(&format!("BidAsk not found for {}", instrument));
