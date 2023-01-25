@@ -18,7 +18,8 @@ pub struct Order {
     pub stop_loss: Option<StopLossConfig>,
     pub stop_out_percent: f64,
     pub margin_call_percent: f64,
-    pub top_up_percent: Option<f64>,
+    pub top_up_enabled: bool,
+    pub top_up_percent: f64,
     pub funding_fee_period: Option<Duration>,
     pub desire_price: Option<f64>,
 }
