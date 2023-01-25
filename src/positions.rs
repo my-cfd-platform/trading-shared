@@ -6,13 +6,11 @@ use uuid::Uuid;
 #[derive(Clone, IntoPrimitive, TryFromPrimitive)]
 #[repr(i32)]
 pub enum ClosePositionReason {
-    ClientCommand = 0,
-    StopOut = 1,
-    TakeProfit = 2,
-    StopLoss = 3,
-    Canceled = 4,
-    AdminAction = 5,
-    InsufficientCollateral = 6,
+    StopOut = 0,
+    TakeProfit = 1,
+    StopLoss = 2,
+    ClientCommand = 3,
+    AdminCommand = 4,
 }
 
 #[derive(Clone)]
