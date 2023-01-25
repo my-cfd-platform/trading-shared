@@ -64,6 +64,22 @@ impl Position {
         }
     }
 
+    pub fn get_create_invest_amount(&self) -> f64 {
+        match self {
+            Position::Opened(position) => position.create_invest_amount,
+            Position::Closed(position) => position.create_invest_amount,
+            Position::Pending(position) => position.create_invest_amount,
+        }
+    }
+
+    pub fn get_create_date(&self) -> DateTime<Utc> {
+        match self {
+            Position::Opened(position) => position.create_date,
+            Position::Closed(position) => position.create_date,
+            Position::Pending(position) => position.create_date,
+        }
+    }
+
     pub fn get_order(&self) -> &Order {
         match self {
             Position::Opened(position) => &position.order,
