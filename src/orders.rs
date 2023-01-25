@@ -20,7 +20,7 @@ pub struct Order {
     pub margin_call_percent: f64,
     pub top_up_percent: Option<f64>,
     pub funding_fee_period: Option<Duration>,
-    pub desired_price: Option<f64>,
+    pub desire_price: Option<f64>,
 }
 
 #[derive(Clone, IntoPrimitive, TryFromPrimitive)]
@@ -36,9 +36,9 @@ pub struct TakeProfitConfig {
 }
 
 impl TakeProfitConfig {
-    pub fn is_triggered(&self, profit: f64, close_price: f64, side: &OrderSide) -> bool {
+    pub fn is_triggered(&self, pnl: f64, close_price: f64, side: &OrderSide) -> bool {
         return match self.unit {
-            AutoClosePositionUnit::AssetAmount => self.value >= profit,
+            AutoClosePositionUnit::AssetAmount => self.value >= pnl,
             AutoClosePositionUnit::PriceRate => match side {
                 OrderSide::Buy => {
                     return self.value <= close_price;
@@ -58,9 +58,9 @@ pub struct StopLossConfig {
 }
 
 impl StopLossConfig {
-    pub fn is_triggered(&self, profit: f64, close_price: f64, side: &OrderSide) -> bool {
+    pub fn is_triggered(&self, pnl: f64, close_price: f64, side: &OrderSide) -> bool {
         return match self.unit {
-            AutoClosePositionUnit::AssetAmount => self.value >= profit,
+            AutoClosePositionUnit::AssetAmount => self.value >= pnl,
             AutoClosePositionUnit::PriceRate => match side {
                 OrderSide::Buy => {
                     return self.value >= close_price;
@@ -88,7 +88,7 @@ impl Order {
     pub fn open(self, calculator: OrderCalculator) -> Position {
         let open_price = calculator.get_open_price(&self.instrument, &self.side);
 
-        if let Some(desired_price) = self.desired_price {
+        if let Some(desired_price) = self.desire_price {
             if open_price >= desired_price {
                 return Position::Opened(self.into_opened(calculator));
             }
@@ -128,6 +128,7 @@ impl Order {
             id: Position::generate_id(),
             open_price: calculator.get_open_price(&self.instrument, &self.side),
             open_date: Utc::now(),
+            open_invest_amount: calculator.calculate_invest_amount(&self.invest_assets, &self.base_asset),
             order: self,
             open_bidasks: calculator.take_bidasks(),
         }

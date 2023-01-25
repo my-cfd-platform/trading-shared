@@ -93,6 +93,7 @@ pub struct OpenedPosition {
     pub open_price: f64,
     pub open_date: DateTime<Utc>,
     pub open_bidasks: Vec<PositionBidAsk>,
+    pub open_invest_amount: f64,
 }
 
 impl OpenedPosition {
@@ -116,37 +117,39 @@ impl OpenedPosition {
             id: self.id.clone(),
             open_date: self.open_date,
             open_price: self.open_price,
-            profit: self.calculate_profit(invested_amount, close_price),
+            pnl: self.calculate_pnl(invested_amount, close_price),
             order: self.order,
             close_bidasks: calculator.take_bidasks(),
+            open_invest_amount: self.open_invest_amount,
+            close_invest_amount: invested_amount,
         };
     }
 
-    pub fn calculate_profit(&self, invest_amount: f64, close_price: f64) -> f64 {
+    pub fn calculate_pnl(&self, invest_amount: f64, close_price: f64) -> f64 {
         let volume = self.order.calculate_volume(invest_amount);
 
-        let profit = match self.order.side {
+        let pnl = match self.order.side {
             OrderSide::Buy => (close_price / self.open_price - 1.0) * volume,
             OrderSide::Sell => (close_price / self.open_price - 1.0) * -volume,
         };
 
-        profit
+        pnl
     }
 
-    pub fn is_stop_out(&self, invest_amount: f64, profit: f64) -> bool {
-        let margin_percent = self.calculate_margin_percent(invest_amount, profit);
+    pub fn is_stop_out(&self, invest_amount: f64, pnl: f64) -> bool {
+        let margin_percent = self.calculate_margin_percent(invest_amount, pnl);
 
         100.0 - margin_percent >= self.order.stop_out_percent
     }
 
-    pub fn is_margin_call(&self, invest_amount: f64, profit: f64) -> bool {
-        let margin_percent = self.calculate_margin_percent(invest_amount, profit);
+    pub fn is_margin_call(&self, invest_amount: f64, pnl: f64) -> bool {
+        let margin_percent = self.calculate_margin_percent(invest_amount, pnl);
 
         100.0 - margin_percent >= self.order.margin_call_percent
     }
 
-    fn calculate_margin_percent(&self, invest_amount: f64, profit: f64) -> f64 {
-        let margin = profit + invest_amount;
+    fn calculate_margin_percent(&self, invest_amount: f64, pnl: f64) -> f64 {
+        let margin = pnl + invest_amount;
         let margin_percent = margin / invest_amount * 100.0;
 
         margin_percent
@@ -158,9 +161,11 @@ pub struct ClosedPosition {
     pub order: Order,
     pub open_price: f64,
     pub open_date: DateTime<Utc>,
+    pub open_invest_amount: f64,
     pub close_price: f64,
     pub close_date: DateTime<Utc>,
     pub close_reason: ClosePositionReason,
-    pub profit: f64,
+    pub close_invest_amount: f64,
+    pub pnl: f64,
     pub close_bidasks: Vec<PositionBidAsk>,
 }
