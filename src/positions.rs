@@ -85,11 +85,14 @@ pub struct PendingPosition {
     pub id: String,
     pub order: Order,
     pub create_date: DateTime<Utc>,
+    pub create_invest_amount: f64,
 }
 
 pub struct OpenedPosition {
     pub id: String,
     pub order: Order,
+    pub create_date: DateTime<Utc>,
+    pub create_invest_amount: f64,
     pub open_price: f64,
     pub open_date: DateTime<Utc>,
     pub open_bidasks: Vec<PositionBidAsk>,
@@ -111,17 +114,19 @@ impl OpenedPosition {
         let close_price = calculator.get_close_price(&self.order.instrument, &self.order.side);
 
         return ClosedPosition {
+            id: self.id.clone(),
+            create_date: self.create_date,
+            create_invest_amount: self.create_invest_amount,
+            open_date: self.open_date,
+            open_price: self.open_price,
+            open_invest_amount: self.open_invest_amount,
             close_date: Utc::now(),
             close_price,
             close_reason: reason,
-            id: self.id.clone(),
-            open_date: self.open_date,
-            open_price: self.open_price,
+            close_bidasks: calculator.take_bidasks(),
+            close_invest_amount: invested_amount,
             pnl: self.calculate_pnl(invested_amount, close_price),
             order: self.order,
-            close_bidasks: calculator.take_bidasks(),
-            open_invest_amount: self.open_invest_amount,
-            close_invest_amount: invested_amount,
         };
     }
 
@@ -158,6 +163,8 @@ impl OpenedPosition {
 
 pub struct ClosedPosition {
     pub id: String,
+    pub create_date: DateTime<Utc>,
+    pub create_invest_amount: f64,
     pub order: Order,
     pub open_price: f64,
     pub open_date: DateTime<Utc>,

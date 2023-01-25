@@ -93,7 +93,7 @@ impl Order {
                 return Position::Opened(self.into_opened(calculator));
             }
 
-            return Position::Pending(self.into_pending());
+            return Position::Pending(self.into_pending(calculator));
         }
 
         Position::Opened(self.into_opened(calculator))
@@ -124,21 +124,27 @@ impl Order {
     }
 
     fn into_opened(self, calculator: OrderCalculator) -> OpenedPosition {
+        let now = Utc::now();
+        let invest_amount = calculator.calculate_invest_amount(&self.invest_assets, &self.pnl_asset);
+
         OpenedPosition {
             id: Position::generate_id(),
+            create_date: now,
+            create_invest_amount: invest_amount,
             open_price: calculator.get_open_price(&self.instrument, &self.side),
-            open_date: Utc::now(),
-            open_invest_amount: calculator.calculate_invest_amount(&self.invest_assets, &self.pnl_asset),
+            open_date: now,
+            open_invest_amount: invest_amount,
             order: self,
             open_bidasks: calculator.take_bidasks(),
         }
     }
 
-    fn into_pending(self) -> PendingPosition {
+    fn into_pending(self, calculator: OrderCalculator) -> PendingPosition {
         PendingPosition {
             id: Position::generate_id(),
-            order: self,
             create_date: Utc::now(),
+            create_invest_amount: calculator.calculate_invest_amount(&self.invest_assets, &self.pnl_asset),
+            order: self,
         }
     }
 }
