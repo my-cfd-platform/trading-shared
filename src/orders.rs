@@ -228,9 +228,8 @@ impl OrderCalculator {
                 .bidasks
                 .get(&instrument)
                 .expect(&format!("BidAsk not found for {}", instrument));
-            let asset_price = bidask.ask + bidask.bid / 2.0;
-            let asset_amount = asset_price * invest_amount;
-            amount += asset_amount;
+            let estimated_amount = bidask.ask * invest_amount;
+            amount += estimated_amount;
         }
 
         amount
