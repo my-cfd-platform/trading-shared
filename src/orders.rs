@@ -134,7 +134,6 @@ impl Order {
             activate_date: now,
             activate_invest_amounts: invest_amounts,
             order: self,
-            open_bidasks: calculator.take_bidasks(),
         }
     }
 
@@ -144,7 +143,6 @@ impl Order {
             open_date: Utc::now(),
             open_invest_amounts: calculator.calculate_invest_amounts(&self.invest_assets, &self.base_asset),
             order: self,
-            open_bidasks: calculator.take_bidasks(),
         }
     }
 }

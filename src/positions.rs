@@ -102,7 +102,6 @@ pub struct PendingPosition {
     pub order: Order,
     pub open_date: DateTime<Utc>,
     pub open_invest_amounts: HashMap<String, f64>,
-    pub open_bidasks: Vec<BidAsk>,
 }
 
 pub struct ActivePosition {
@@ -110,7 +109,6 @@ pub struct ActivePosition {
     pub order: Order,
     pub open_date: DateTime<Utc>,
     pub open_invest_amounts: HashMap<String, f64>,
-    pub open_bidasks: Vec<BidAsk>,
     pub activate_price: f64,
     pub activate_date: DateTime<Utc>,
     pub activate_invest_amounts: HashMap<String, f64>,
@@ -138,7 +136,6 @@ impl ActivePosition {
             close_date: Utc::now(),
             close_price,
             close_reason: reason,
-            close_bidasks: calculator.take_bidasks(),
             close_invest_amounts: invest_amounts,
             order: self.order,
         };
@@ -208,5 +205,4 @@ pub struct ClosedPosition {
     pub close_reason: ClosePositionReason,
     pub close_invest_amounts: HashMap<String, f64>,
     pub pnl: f64,
-    pub close_bidasks: Vec<BidAsk>,
 }
