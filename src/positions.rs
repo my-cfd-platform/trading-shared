@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::orders::{Order, OrderCalculator, OrderSide};
 use chrono::{DateTime, Utc};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
@@ -152,13 +154,33 @@ impl ActivePosition {
         pnl
     }
 
-    pub fn is_stop_out(&self, invest_amount: f64, pnl: f64) -> bool {
+    pub fn calculate_pnls_by_assets(
+        &self,
+        invest_amounts: HashMap<String, f64>,
+        close_price: f64,
+    ) -> HashMap<String, f64> {
+        let mut pnls_by_assets = HashMap::with_capacity(self.order.invest_assets.len());
+        let total_investment = invest_amounts.values().sum();
+        let pnl = self.calculate_pnl(total_investment, close_price);
+
+        for (asset, amount) in invest_amounts {
+            let percent = amount / total_investment * 100.0;
+            let asset_pnl = pnl * percent / 100.0;
+            pnls_by_assets.insert(asset, asset_pnl);
+        }
+
+        pnls_by_assets
+    }
+
+    pub fn is_stop_out(&self, invest_amount: f64, close_price: f64) -> bool {
+        let pnl = self.calculate_pnl(invest_amount, close_price);
         let margin_percent = self.calculate_margin_percent(invest_amount, pnl);
 
         100.0 - margin_percent >= self.order.stop_out_percent
     }
 
-    pub fn is_margin_call(&self, invest_amount: f64, pnl: f64) -> bool {
+    pub fn is_margin_call(&self, invest_amount: f64, close_price: f64) -> bool {
+        let pnl = self.calculate_pnl(invest_amount, close_price);
         let margin_percent = self.calculate_margin_percent(invest_amount, pnl);
 
         100.0 - margin_percent >= self.order.margin_call_percent
