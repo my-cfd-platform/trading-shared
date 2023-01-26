@@ -6,7 +6,6 @@ use uuid::Uuid;
 
 pub struct Order {
     pub id: String,
-    pub process_id: String,
     pub wallet_id: String,
     pub instrument: String,
     pub base_asset: String,
