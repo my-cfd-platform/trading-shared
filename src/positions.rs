@@ -1,8 +1,10 @@
-use std::collections::HashMap;
-
-use crate::orders::{Order, OrderCalculator, OrderSide};
+use crate::{
+    calculations::get_close_price,
+    orders::{Order, OrderSide},
+};
 use chrono::{DateTime, Utc};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 #[derive(Clone, IntoPrimitive, TryFromPrimitive)]
@@ -115,14 +117,13 @@ pub struct ActivePosition {
 }
 
 impl ActivePosition {
-    pub fn close(self, calculator: OrderCalculator, reason: ClosePositionReason) -> ClosedPosition {
-        if !calculator.can_calculate(&self.order) {
-            panic!("Invalid calculator for position")
-        }
-
-        let invest_amounts =
-            calculator.calculate_invest_amounts(&self.order.invest_assets, &self.order.base_asset);
-        let close_price = calculator.get_close_price(&self.order.instrument, &self.order.side);
+    pub fn close(
+        self,
+        bidasks: &HashMap<String, BidAsk>,
+        reason: ClosePositionReason,
+    ) -> ClosedPosition {
+        let invest_amounts = self.order.calculate_invest_amounts(bidasks);
+        let close_price = get_close_price(bidasks, &self.order.instrument, &self.order.side);
         let total_invest_amount = invest_amounts.values().sum();
 
         return ClosedPosition {

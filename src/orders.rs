@@ -1,4 +1,4 @@
-use crate::positions::{ActivePosition, PendingPosition, Position, BidAsk};
+use crate::{positions::{ActivePosition, PendingPosition, Position, BidAsk}, calculations::{get_open_price}};
 use chrono::{DateTime, Duration, Utc};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use std::collections::HashMap;
@@ -85,18 +85,18 @@ impl Order {
         Uuid::new_v4().to_string()
     }
 
-    pub fn open(self, calculator: OrderCalculator) -> Position {
-        let open_price = calculator.get_open_price(&self.instrument, &self.side);
+    pub fn open(self, bidasks: &HashMap<String, BidAsk>) -> Position {
+        let open_price = get_open_price(bidasks, &self.instrument, &self.side);
 
         if let Some(desired_price) = self.desire_price {
             if open_price >= desired_price {
-                return Position::Active(self.into_active(calculator));
+                return Position::Active(self.into_active(bidasks));
             }
 
-            return Position::Pending(self.into_pending(calculator));
+            return Position::Pending(self.into_pending(bidasks));
         }
 
-        Position::Active(self.into_active(calculator))
+        Position::Active(self.into_active(bidasks))
     }
 
     pub fn calculate_volume(&self, invest_amount: f64) -> f64 {
@@ -122,126 +122,45 @@ impl Order {
         amount
     }
 
-    fn into_active(self, calculator: OrderCalculator) -> ActivePosition {
+    pub fn calculate_invest_amounts(
+        &self,
+        bidasks: &HashMap<String, BidAsk>,
+    ) -> HashMap<String, f64> {
+        let mut amounts = HashMap::with_capacity(self.invest_assets.len());
+    
+        for (invest_asset, invest_amount) in self.invest_assets.iter() {
+            let instrument = BidAsk::generate_id(invest_asset, &self.base_asset);
+            let bidask = bidasks
+                .get(&instrument)
+                .expect(&format!("BidAsk not found for {}", instrument));
+            let estimated_amount = bidask.ask * invest_amount;
+            amounts.insert(invest_asset.to_owned(), estimated_amount);
+        }
+    
+        amounts
+    }
+
+    fn into_active(self, bidasks: &HashMap<String, BidAsk>) -> ActivePosition {
         let now = Utc::now();
-        let invest_amounts = calculator.calculate_invest_amounts(&self.invest_assets, &self.base_asset);
+        let invest_amounts = self.calculate_invest_amounts(bidasks);
 
         ActivePosition {
             id: Position::generate_id(),
             open_date: now,
             open_invest_amounts: invest_amounts.clone(),
-            activate_price: calculator.get_open_price(&self.instrument, &self.side),
+            activate_price: get_open_price(bidasks, &self.instrument, &self.side),
             activate_date: now,
             activate_invest_amounts: invest_amounts,
             order: self,
         }
     }
 
-    fn into_pending(self, calculator: OrderCalculator) -> PendingPosition {
+    fn into_pending(self, bidasks: &HashMap<String, BidAsk>) -> PendingPosition {
         PendingPosition {
             id: Position::generate_id(),
             open_date: Utc::now(),
-            open_invest_amounts: calculator.calculate_invest_amounts(&self.invest_assets, &self.base_asset),
+            open_invest_amounts: self.calculate_invest_amounts(bidasks),
             order: self,
         }
-    }
-}
-
-pub struct OrderCalculator {
-    order_id: String,
-    bidasks: HashMap<String, BidAsk>,
-}
-
-impl OrderCalculator {
-    pub fn new(order: &Order, bidasks: HashMap<String, BidAsk>) -> Self {
-
-        if let None = bidasks.get(&order.instrument) {
-            panic!("BidAsk not found for {}", order.instrument);
-        }
-
-        for (asset, _amount) in order.invest_assets.iter() {
-            // todo: generate by instrument model
-            let instrument = format!("{}{}", asset, order.base_asset);
-            let _bidask = bidasks
-                .get(&instrument)
-                .expect(&format!("BidAsk not found for {}", instrument));
-        }
-
-        Self {
-            bidasks,
-            order_id: order.id.clone(),
-        }
-    }
-
-    pub fn can_calculate(&self, order: &Order) -> bool {
-        if self.order_id != order.id {
-            return false;
-        }
-
-        return true;
-    }
-
-    pub fn get_close_price(&self, instrument: &str, side: &OrderSide) -> f64 {
-        let bidask = self
-            .bidasks
-            .get(instrument)
-            .expect(&format!("BidAsk not found for {}", instrument));
-        let price = bidask.get_close_price(side);
-
-        return price;
-    }
-
-    pub fn get_open_price(&self, instrument: &str, side: &OrderSide) -> f64 {
-        let bidask = self
-            .bidasks
-            .get(instrument)
-            .expect(&format!("BidAsk not found for {}", instrument));
-        let price = bidask.get_open_price(side);
-
-        return price;
-    }
-
-    pub fn calculate_invest_amount(
-        &self,
-        invest_assets: &HashMap<String, f64>,
-        base_asset: &str,
-    ) -> f64 {
-        let mut amount = 0.0;
-
-        for (invest_asset, invest_amount) in invest_assets.iter() {
-            let instrument = BidAsk::generate_id(invest_asset, base_asset);
-            let bidask = self
-                .bidasks
-                .get(&instrument)
-                .expect(&format!("BidAsk not found for {}", instrument));
-            let estimated_amount = bidask.ask * invest_amount;
-            amount += estimated_amount;
-        }
-
-        amount
-    }
-
-    pub fn calculate_invest_amounts(
-        &self,
-        invest_assets: &HashMap<String, f64>,
-        base_asset: &str,
-    ) -> HashMap<String, f64> {
-        let mut amounts = HashMap::with_capacity(invest_assets.len());
-
-        for (invest_asset, invest_amount) in invest_assets.iter() {
-            let instrument = BidAsk::generate_id(invest_asset, base_asset);
-            let bidask = self
-                .bidasks
-                .get(&instrument)
-                .expect(&format!("BidAsk not found for {}", instrument));
-            let estimated_amount = bidask.ask * invest_amount;
-            amounts.insert(invest_asset.to_owned(), estimated_amount);
-        }
-
-        amounts
-    }
-
-    pub fn take_bidasks(self) -> Vec<BidAsk> {
-        self.bidasks.into_values().collect()
     }
 }

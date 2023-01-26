@@ -1,6 +1,7 @@
 pub mod positions;
 pub mod orders;
 pub mod caches;
+pub mod calculations;
 
 #[cfg(test)]
 mod tests {
