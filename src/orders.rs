@@ -124,15 +124,15 @@ impl Order {
 
     fn into_active(self, calculator: OrderCalculator) -> ActivePosition {
         let now = Utc::now();
-        let invest_amount = calculator.calculate_invest_amount(&self.invest_assets, &self.base_asset);
+        let invest_amounts = calculator.calculate_invest_amounts(&self.invest_assets, &self.base_asset);
 
         ActivePosition {
             id: Position::generate_id(),
             open_date: now,
-            open_invest_amount: invest_amount,
+            open_invest_amounts: invest_amounts.clone(),
             activate_price: calculator.get_open_price(&self.instrument, &self.side),
             activate_date: now,
-            activate_invest_amount: invest_amount,
+            activate_invest_amounts: invest_amounts,
             order: self,
             open_bidasks: calculator.take_bidasks(),
         }
@@ -142,7 +142,7 @@ impl Order {
         PendingPosition {
             id: Position::generate_id(),
             open_date: Utc::now(),
-            open_invest_amount: calculator.calculate_invest_amount(&self.invest_assets, &self.base_asset),
+            open_invest_amounts: calculator.calculate_invest_amounts(&self.invest_assets, &self.base_asset),
             order: self,
             open_bidasks: calculator.take_bidasks(),
         }
@@ -221,6 +221,26 @@ impl OrderCalculator {
         }
 
         amount
+    }
+
+    pub fn calculate_invest_amounts(
+        &self,
+        invest_assets: &HashMap<String, f64>,
+        base_asset: &str,
+    ) -> HashMap<String, f64> {
+        let mut amounts = HashMap::with_capacity(invest_assets.len());
+
+        for (invest_asset, invest_amount) in invest_assets.iter() {
+            let instrument = BidAsk::generate_id(invest_asset, base_asset);
+            let bidask = self
+                .bidasks
+                .get(&instrument)
+                .expect(&format!("BidAsk not found for {}", instrument));
+            let estimated_amount = bidask.ask * invest_amount;
+            amounts.insert(invest_asset.to_owned(), estimated_amount);
+        }
+
+        amounts
     }
 
     pub fn take_bidasks(self) -> Vec<BidAsk> {
