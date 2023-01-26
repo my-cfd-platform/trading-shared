@@ -1,20 +1,20 @@
 use crate::{
-    positions::{Position, PositionBidAsk},
+    positions::{Position, BidAsk},
 };
 use std::{collections::HashMap, mem};
 
 pub struct BidAsksCache {
-    bidasks_by_instruments: HashMap<String, PositionBidAsk>,
+    bidasks_by_instruments: HashMap<String, BidAsk>,
 }
 
 impl BidAsksCache {
-    pub fn new(bidasks_by_instruments: HashMap<String, PositionBidAsk>) -> Self {
+    pub fn new(bidasks_by_instruments: HashMap<String, BidAsk>) -> Self {
         Self {
             bidasks_by_instruments,
         }
     }
 
-    pub fn update(&mut self, bidask: PositionBidAsk) {
+    pub fn update(&mut self, bidask: BidAsk) {
         let current_bidask = self.bidasks_by_instruments.get_mut(&bidask.instrument);
 
         if let Some(current_bidask) = current_bidask {
@@ -25,17 +25,17 @@ impl BidAsksCache {
         }
     }
 
-    pub fn find(&self, instrument: &str) -> Option<&PositionBidAsk> {
+    pub fn find(&self, instrument: &str) -> Option<&BidAsk> {
         let bidask = self.bidasks_by_instruments.get(instrument);
 
         return bidask;
     }
 
-    pub fn get(&self, base_asset: &str, assets: &[&String]) -> HashMap<String, PositionBidAsk> {
+    pub fn get(&self, base_asset: &str, assets: &[&String]) -> HashMap<String, BidAsk> {
         let mut bidasks = HashMap::with_capacity(assets.len());
 
         for asset in assets.iter() {
-            let instrument = PositionBidAsk::generate_id(asset, base_asset);
+            let instrument = BidAsk::generate_id(asset, base_asset);
             let bidask = self.bidasks_by_instruments.get(&instrument);
 
             if let Some(bidask) = bidask {

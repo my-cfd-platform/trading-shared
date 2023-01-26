@@ -1,4 +1,4 @@
-use crate::positions::{ActivePosition, PendingPosition, Position, PositionBidAsk};
+use crate::positions::{ActivePosition, PendingPosition, Position, BidAsk};
 use chrono::{DateTime, Duration, Utc};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use std::collections::HashMap;
@@ -90,13 +90,13 @@ impl Order {
 
         if let Some(desired_price) = self.desire_price {
             if open_price >= desired_price {
-                return Position::Active(self.into_opened(calculator));
+                return Position::Active(self.into_active(calculator));
             }
 
             return Position::Pending(self.into_pending(calculator));
         }
 
-        Position::Active(self.into_opened(calculator))
+        Position::Active(self.into_active(calculator))
     }
 
     pub fn calculate_volume(&self, invest_amount: f64) -> f64 {
@@ -105,7 +105,7 @@ impl Order {
 
     pub fn calculate_invest_amount(
         &self,
-        bidasks_by_instruments: &HashMap<String, PositionBidAsk>,
+        bidasks_by_instruments: &HashMap<String, BidAsk>,
     ) -> f64 {
         let mut amount = 0.0;
 
@@ -115,15 +115,14 @@ impl Order {
             let bidask = bidasks_by_instruments
                 .get(&instrument)
                 .expect(&format!("BidAsk not found for {}", self.instrument));
-            let asset_price = bidask.ask + bidask.bid / 2.0;
-            let asset_amount = asset_price * invest_amount;
+            let asset_amount = bidask.ask * invest_amount;
             amount += asset_amount;
         }
 
         amount
     }
 
-    fn into_opened(self, calculator: OrderCalculator) -> ActivePosition {
+    fn into_active(self, calculator: OrderCalculator) -> ActivePosition {
         let now = Utc::now();
         let invest_amount = calculator.calculate_invest_amount(&self.invest_assets, &self.base_asset);
 
@@ -152,11 +151,11 @@ impl Order {
 
 pub struct OrderCalculator {
     order_id: String,
-    bidasks: HashMap<String, PositionBidAsk>,
+    bidasks: HashMap<String, BidAsk>,
 }
 
 impl OrderCalculator {
-    pub fn new(order: &Order, bidasks: HashMap<String, PositionBidAsk>) -> Self {
+    pub fn new(order: &Order, bidasks: HashMap<String, BidAsk>) -> Self {
 
         if let None = bidasks.get(&order.instrument) {
             panic!("BidAsk not found for {}", order.instrument);
@@ -212,7 +211,7 @@ impl OrderCalculator {
         let mut amount = 0.0;
 
         for (invest_asset, invest_amount) in invest_assets.iter() {
-            let instrument = PositionBidAsk::generate_id(invest_asset, base_asset);
+            let instrument = BidAsk::generate_id(invest_asset, base_asset);
             let bidask = self
                 .bidasks
                 .get(&instrument)
@@ -224,7 +223,7 @@ impl OrderCalculator {
         amount
     }
 
-    pub fn take_bidasks(self) -> Vec<PositionBidAsk> {
+    pub fn take_bidasks(self) -> Vec<BidAsk> {
         self.bidasks.into_values().collect()
     }
 }

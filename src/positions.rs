@@ -14,14 +14,14 @@ pub enum ClosePositionReason {
 }
 
 #[derive(Clone)]
-pub struct PositionBidAsk {
+pub struct BidAsk {
     pub instrument: String,
     pub datetime: DateTime<Utc>,
     pub bid: f64,
     pub ask: f64,
 }
 
-impl PositionBidAsk {
+impl BidAsk {
     pub fn generate_id(base_asset: &str, quote_asset: &str) -> String {
         let id = format!("{}{}", base_asset, quote_asset); // todo: find better solution
 
@@ -100,7 +100,7 @@ pub struct PendingPosition {
     pub order: Order,
     pub open_date: DateTime<Utc>,
     pub open_invest_amount: f64,
-    pub open_bidasks: Vec<PositionBidAsk>,
+    pub open_bidasks: Vec<BidAsk>,
 }
 
 pub struct ActivePosition {
@@ -108,7 +108,7 @@ pub struct ActivePosition {
     pub order: Order,
     pub open_date: DateTime<Utc>,
     pub open_invest_amount: f64,
-    pub open_bidasks: Vec<PositionBidAsk>,
+    pub open_bidasks: Vec<BidAsk>,
     pub activate_price: f64,
     pub activate_date: DateTime<Utc>,
     pub activate_invest_amount: f64,
@@ -185,5 +185,5 @@ pub struct ClosedPosition {
     pub close_reason: ClosePositionReason,
     pub close_invest_amount: f64,
     pub pnl: f64,
-    pub close_bidasks: Vec<PositionBidAsk>,
+    pub close_bidasks: Vec<BidAsk>,
 }
