@@ -184,16 +184,6 @@ impl OrderCalculator {
         return true;
     }
 
-    pub fn get_average_price(&self, instrument: &str) -> f64 {
-        let bidask = self
-            .bidasks
-            .get(instrument)
-            .expect(&format!("BidAsk not found for {}", instrument));
-        let price = (bidask.bid + bidask.ask) / 2.0;
-
-        return price;
-    }
-
     pub fn get_close_price(&self, instrument: &str, side: &OrderSide) -> f64 {
         let bidask = self
             .bidasks
