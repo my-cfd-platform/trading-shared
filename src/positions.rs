@@ -128,6 +128,7 @@ impl ActivePosition {
         return ClosedPosition {
             id: self.id.clone(),
             pnl: self.calculate_pnl(total_invest_amount, close_price),
+            asset_pnls: self.calculate_asset_pnls(&invest_amounts, close_price),
             open_date: self.open_date,
             open_invest_amounts: self.open_invest_amounts,
             activate_date: self.activate_date,
@@ -154,7 +155,7 @@ impl ActivePosition {
 
     pub fn calculate_asset_pnls(
         &self,
-        invest_amounts: HashMap<String, f64>,
+        invest_amounts: &HashMap<String, f64>,
         close_price: f64,
     ) -> HashMap<String, f64> {
         let mut pnls_by_assets = HashMap::with_capacity(self.order.invest_assets.len());
@@ -164,7 +165,7 @@ impl ActivePosition {
         for (asset, amount) in invest_amounts {
             let percent = amount / total_investment * 100.0;
             let asset_pnl = pnl * percent / 100.0;
-            pnls_by_assets.insert(asset, asset_pnl);
+            pnls_by_assets.insert(asset.to_owned(), asset_pnl);
         }
 
         pnls_by_assets
@@ -205,4 +206,5 @@ pub struct ClosedPosition {
     pub close_reason: ClosePositionReason,
     pub close_invest_amounts: HashMap<String, f64>,
     pub pnl: f64,
+    pub asset_pnls: HashMap<String, f64>,
 }
