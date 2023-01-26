@@ -1,5 +1,5 @@
 use crate::{
-    calculations::get_close_price,
+    calculations::{get_close_price, calculate_margin_percent},
     orders::{Order, OrderSide},
 };
 use chrono::{DateTime, Utc};
@@ -174,23 +174,16 @@ impl ActivePosition {
 
     pub fn is_stop_out(&self, invest_amount: f64, close_price: f64) -> bool {
         let pnl = self.calculate_pnl(invest_amount, close_price);
-        let margin_percent = self.calculate_margin_percent(invest_amount, pnl);
+        let margin_percent = calculate_margin_percent(invest_amount, pnl);
 
         100.0 - margin_percent >= self.order.stop_out_percent
     }
 
     pub fn is_margin_call(&self, invest_amount: f64, close_price: f64) -> bool {
         let pnl = self.calculate_pnl(invest_amount, close_price);
-        let margin_percent = self.calculate_margin_percent(invest_amount, pnl);
+        let margin_percent = calculate_margin_percent(invest_amount, pnl);
 
         100.0 - margin_percent >= self.order.margin_call_percent
-    }
-
-    fn calculate_margin_percent(&self, invest_amount: f64, pnl: f64) -> f64 {
-        let margin = pnl + invest_amount;
-        let margin_percent = margin / invest_amount * 100.0;
-
-        margin_percent
     }
 }
 

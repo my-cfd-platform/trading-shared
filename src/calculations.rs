@@ -26,3 +26,10 @@ pub fn get_open_price(
 
     return price;
 }
+
+pub fn calculate_margin_percent(invest_amount: f64, pnl: f64) -> f64 {
+    let margin = pnl + invest_amount;
+    let margin_percent = margin / invest_amount * 100.0;
+
+    margin_percent
+}
