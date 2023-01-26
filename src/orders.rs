@@ -1,4 +1,4 @@
-use crate::positions::{OpenedPosition, PendingPosition, Position, PositionBidAsk};
+use crate::positions::{ActivePosition, PendingPosition, Position, PositionBidAsk};
 use chrono::{DateTime, Duration, Utc};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use std::collections::HashMap;
@@ -91,13 +91,13 @@ impl Order {
 
         if let Some(desired_price) = self.desire_price {
             if open_price >= desired_price {
-                return Position::Opened(self.into_opened(calculator));
+                return Position::Active(self.into_opened(calculator));
             }
 
             return Position::Pending(self.into_pending(calculator));
         }
 
-        Position::Opened(self.into_opened(calculator))
+        Position::Active(self.into_opened(calculator))
     }
 
     pub fn calculate_volume(&self, invest_amount: f64) -> f64 {
@@ -124,17 +124,17 @@ impl Order {
         amount
     }
 
-    fn into_opened(self, calculator: OrderCalculator) -> OpenedPosition {
+    fn into_opened(self, calculator: OrderCalculator) -> ActivePosition {
         let now = Utc::now();
         let invest_amount = calculator.calculate_invest_amount(&self.invest_assets, &self.pnl_asset);
 
-        OpenedPosition {
+        ActivePosition {
             id: Position::generate_id(),
-            create_date: now,
-            create_invest_amount: invest_amount,
-            open_price: calculator.get_open_price(&self.instrument, &self.side),
             open_date: now,
             open_invest_amount: invest_amount,
+            activate_price: calculator.get_open_price(&self.instrument, &self.side),
+            activate_date: now,
+            activate_invest_amount: invest_amount,
             order: self,
             open_bidasks: calculator.take_bidasks(),
         }
@@ -143,9 +143,10 @@ impl Order {
     fn into_pending(self, calculator: OrderCalculator) -> PendingPosition {
         PendingPosition {
             id: Position::generate_id(),
-            create_date: Utc::now(),
-            create_invest_amount: calculator.calculate_invest_amount(&self.invest_assets, &self.pnl_asset),
+            open_date: Utc::now(),
+            open_invest_amount: calculator.calculate_invest_amount(&self.invest_assets, &self.pnl_asset),
             order: self,
+            open_bidasks: calculator.take_bidasks(),
         }
     }
 }

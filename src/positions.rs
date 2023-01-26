@@ -1,4 +1,4 @@
-use crate::orders::{Order, OrderSide, OrderCalculator};
+use crate::orders::{Order, OrderCalculator, OrderSide};
 use chrono::{DateTime, Utc};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use uuid::Uuid;
@@ -44,7 +44,7 @@ impl PositionBidAsk {
 }
 
 pub enum Position {
-    Opened(OpenedPosition),
+    Active(ActivePosition),
     Closed(ClosedPosition),
     Pending(PendingPosition),
 }
@@ -56,7 +56,7 @@ impl Position {
 
     pub fn get_id(&self) -> &str {
         match self {
-            Position::Opened(position) => &position.id,
+            Position::Active(position) => &position.id,
             Position::Closed(position) => &position.id,
             Position::Pending(position) => &position.id,
         }
@@ -64,23 +64,23 @@ impl Position {
 
     pub fn get_create_invest_amount(&self) -> f64 {
         match self {
-            Position::Opened(position) => position.create_invest_amount,
+            Position::Active(position) => position.open_invest_amount,
             Position::Closed(position) => position.create_invest_amount,
-            Position::Pending(position) => position.create_invest_amount,
+            Position::Pending(position) => position.open_invest_amount,
         }
     }
 
     pub fn get_create_date(&self) -> DateTime<Utc> {
         match self {
-            Position::Opened(position) => position.create_date,
+            Position::Active(position) => position.open_date,
             Position::Closed(position) => position.create_date,
-            Position::Pending(position) => position.create_date,
+            Position::Pending(position) => position.open_date,
         }
     }
 
     pub fn get_order(&self) -> &Order {
         match self {
-            Position::Opened(position) => &position.order,
+            Position::Active(position) => &position.order,
             Position::Closed(position) => &position.order,
             Position::Pending(position) => &position.order,
         }
@@ -88,7 +88,7 @@ impl Position {
 
     pub fn get_order_mut(&mut self) -> &mut Order {
         match self {
-            Position::Opened(position) => &mut position.order,
+            Position::Active(position) => &mut position.order,
             Position::Closed(position) => &mut position.order,
             Position::Pending(position) => &mut position.order,
         }
@@ -98,27 +98,24 @@ impl Position {
 pub struct PendingPosition {
     pub id: String,
     pub order: Order,
-    pub create_date: DateTime<Utc>,
-    pub create_invest_amount: f64,
+    pub open_date: DateTime<Utc>,
+    pub open_invest_amount: f64,
+    pub open_bidasks: Vec<PositionBidAsk>,
 }
 
-pub struct OpenedPosition {
+pub struct ActivePosition {
     pub id: String,
     pub order: Order,
-    pub create_date: DateTime<Utc>,
-    pub create_invest_amount: f64,
-    pub open_price: f64,
     pub open_date: DateTime<Utc>,
-    pub open_bidasks: Vec<PositionBidAsk>,
     pub open_invest_amount: f64,
+    pub open_bidasks: Vec<PositionBidAsk>,
+    pub activate_price: f64,
+    pub activate_date: DateTime<Utc>,
+    pub activate_invest_amount: f64,
 }
 
-impl OpenedPosition {
-    pub fn close(
-        self,
-        calculator: OrderCalculator,
-        reason: ClosePositionReason,
-    ) -> ClosedPosition {
+impl ActivePosition {
+    pub fn close(self, calculator: OrderCalculator, reason: ClosePositionReason) -> ClosedPosition {
         if !calculator.can_calculate(&self.order) {
             panic!("Invalid calculator for position")
         }
@@ -129,11 +126,11 @@ impl OpenedPosition {
 
         return ClosedPosition {
             id: self.id.clone(),
-            create_date: self.create_date,
-            create_invest_amount: self.create_invest_amount,
-            open_date: self.open_date,
-            open_price: self.open_price,
-            open_invest_amount: self.open_invest_amount,
+            create_date: self.open_date,
+            create_invest_amount: self.open_invest_amount,
+            open_date: self.activate_date,
+            open_price: self.activate_price,
+            open_invest_amount: self.activate_invest_amount,
             close_date: Utc::now(),
             close_price,
             close_reason: reason,
@@ -148,8 +145,8 @@ impl OpenedPosition {
         let volume = self.order.calculate_volume(invest_amount);
 
         let pnl = match self.order.side {
-            OrderSide::Buy => (close_price / self.open_price - 1.0) * volume,
-            OrderSide::Sell => (close_price / self.open_price - 1.0) * -volume,
+            OrderSide::Buy => (close_price / self.activate_price - 1.0) * volume,
+            OrderSide::Sell => (close_price / self.activate_price - 1.0) * -volume,
         };
 
         pnl
