@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use crate::{orders::OrderSide, positions::BidAsk};
+use std::collections::HashMap;
 
 pub fn get_close_price(
     bidasks: &HashMap<String, BidAsk>,

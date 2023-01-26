@@ -1,6 +1,4 @@
-use crate::{
-    positions::{Position, BidAsk},
-};
+use crate::positions::{BidAsk, Position};
 use std::{collections::HashMap, mem};
 
 pub struct BidAsksCache {
@@ -41,12 +39,10 @@ impl BidAsksCache {
             if let Some(bidask) = bidask {
                 bidasks.insert(instrument, bidask.clone());
             }
-
         }
 
         return bidasks;
     }
-
 }
 
 pub struct PositionsCache {

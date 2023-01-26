@@ -1,4 +1,7 @@
-use crate::{positions::{ActivePosition, PendingPosition, Position, BidAsk}, calculations::{get_open_price}};
+use crate::{
+    calculations::get_open_price,
+    positions::{ActivePosition, BidAsk, PendingPosition, Position},
+};
 use chrono::{DateTime, Duration, Utc};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use std::collections::HashMap;
@@ -103,10 +106,7 @@ impl Order {
         invest_amount * self.leverage
     }
 
-    pub fn calculate_invest_amount(
-        &self,
-        bidasks_by_instruments: &HashMap<String, BidAsk>,
-    ) -> f64 {
+    pub fn calculate_invest_amount(&self, bidasks_by_instruments: &HashMap<String, BidAsk>) -> f64 {
         let mut amount = 0.0;
 
         for (invest_asset, invest_amount) in self.invest_assets.iter() {
@@ -127,7 +127,7 @@ impl Order {
         bidasks: &HashMap<String, BidAsk>,
     ) -> HashMap<String, f64> {
         let mut amounts = HashMap::with_capacity(self.invest_assets.len());
-    
+
         for (invest_asset, invest_amount) in self.invest_assets.iter() {
             let instrument = BidAsk::generate_id(invest_asset, &self.base_asset);
             let bidask = bidasks
@@ -136,7 +136,7 @@ impl Order {
             let estimated_amount = bidask.ask * invest_amount;
             amounts.insert(invest_asset.to_owned(), estimated_amount);
         }
-    
+
         amounts
     }
 

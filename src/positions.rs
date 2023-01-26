@@ -1,5 +1,5 @@
 use crate::{
-    calculations::{get_close_price, calculate_margin_percent},
+    calculations::{calculate_margin_percent, get_close_price},
     orders::{Order, OrderSide},
 };
 use chrono::{DateTime, Utc};
@@ -127,7 +127,6 @@ impl ActivePosition {
         let total_invest_amount = invest_amounts.values().sum();
 
         return ClosedPosition {
-            id: self.id.clone(),
             pnl: self.calculate_pnl(total_invest_amount, close_price),
             asset_pnls: self.calculate_asset_pnls(&invest_amounts, close_price),
             open_date: self.open_date,
@@ -140,10 +139,25 @@ impl ActivePosition {
             close_reason: reason,
             close_invest_amounts: invest_amounts,
             order: self.order,
+            id: self.id,
         };
     }
 
-    pub fn calculate_pnl(&self, invest_amount: f64, close_price: f64) -> f64 {
+    pub fn is_stop_out(&self, invest_amount: f64, close_price: f64) -> bool {
+        let pnl = self.calculate_pnl(invest_amount, close_price);
+        let margin_percent = calculate_margin_percent(invest_amount, pnl);
+
+        100.0 - margin_percent >= self.order.stop_out_percent
+    }
+
+    pub fn is_margin_call(&self, invest_amount: f64, close_price: f64) -> bool {
+        let pnl = self.calculate_pnl(invest_amount, close_price);
+        let margin_percent = calculate_margin_percent(invest_amount, pnl);
+
+        100.0 - margin_percent >= self.order.margin_call_percent
+    }
+
+    fn calculate_pnl(&self, invest_amount: f64, close_price: f64) -> f64 {
         let volume = self.order.calculate_volume(invest_amount);
 
         let pnl = match self.order.side {
@@ -154,7 +168,7 @@ impl ActivePosition {
         pnl
     }
 
-    pub fn calculate_asset_pnls(
+    fn calculate_asset_pnls(
         &self,
         invest_amounts: &HashMap<String, f64>,
         close_price: f64,
@@ -170,20 +184,6 @@ impl ActivePosition {
         }
 
         pnls_by_assets
-    }
-
-    pub fn is_stop_out(&self, invest_amount: f64, close_price: f64) -> bool {
-        let pnl = self.calculate_pnl(invest_amount, close_price);
-        let margin_percent = calculate_margin_percent(invest_amount, pnl);
-
-        100.0 - margin_percent >= self.order.stop_out_percent
-    }
-
-    pub fn is_margin_call(&self, invest_amount: f64, close_price: f64) -> bool {
-        let pnl = self.calculate_pnl(invest_amount, close_price);
-        let margin_percent = calculate_margin_percent(invest_amount, pnl);
-
-        100.0 - margin_percent >= self.order.margin_call_percent
     }
 }
 
