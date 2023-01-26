@@ -121,7 +121,7 @@ impl ActivePosition {
         }
 
         let invested_amount =
-            calculator.calculate_invest_amount(&self.order.invest_assets, &self.order.pnl_asset);
+            calculator.calculate_invest_amount(&self.order.invest_assets, &self.order.base_asset);
         let close_price = calculator.get_close_price(&self.order.instrument, &self.order.side);
 
         return ClosedPosition {
