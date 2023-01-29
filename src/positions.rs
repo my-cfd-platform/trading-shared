@@ -116,7 +116,7 @@ impl PendingPosition {
         let close_price = get_close_price(bidasks, &self.order.instrument, &self.order.side);
 
         return ClosedPosition {
-            pnl: 0.0,
+            pnl: None,
             asset_pnls: HashMap::new(),
             open_date: self.open_date,
             open_invest_amounts: self.open_invest_amounts,
@@ -154,7 +154,7 @@ impl ActivePosition {
         let total_invest_amount = invest_amounts.values().sum();
 
         return ClosedPosition {
-            pnl: self.calculate_pnl(total_invest_amount, close_price),
+            pnl: Some(self.calculate_pnl(total_invest_amount, close_price)),
             asset_pnls: self.calculate_asset_pnls(&invest_amounts, close_price),
             open_date: self.open_date,
             open_invest_amounts: self.open_invest_amounts,
@@ -226,6 +226,6 @@ pub struct ClosedPosition {
     pub close_date: DateTime<Utc>,
     pub close_reason: ClosePositionReason,
     pub close_invest_amounts: HashMap<String, f64>,
-    pub pnl: f64,
+    pub pnl: Option<f64>,
     pub asset_pnls: HashMap<String, f64>,
 }
