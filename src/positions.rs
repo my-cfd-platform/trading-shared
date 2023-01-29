@@ -117,7 +117,7 @@ impl PendingPosition {
 
         return ClosedPosition {
             pnl: None,
-            asset_pnls: HashMap::new(),
+            pnl_assets: HashMap::new(),
             open_date: self.open_date,
             open_invest_amounts: self.open_invest_amounts,
             activate_date: None,
@@ -155,7 +155,7 @@ impl ActivePosition {
 
         return ClosedPosition {
             pnl: Some(self.calculate_pnl(total_invest_amount, close_price)),
-            asset_pnls: self.calculate_asset_pnls(&invest_amounts, close_price),
+            pnl_assets: self.calculate_asset_pnls(&invest_amounts, close_price),
             open_date: self.open_date,
             open_invest_amounts: self.open_invest_amounts,
             activate_date: Some(self.activate_date),
@@ -227,5 +227,5 @@ pub struct ClosedPosition {
     pub close_reason: ClosePositionReason,
     pub close_invest_amounts: HashMap<String, f64>,
     pub pnl: Option<f64>,
-    pub asset_pnls: HashMap<String, f64>,
+    pub pnl_assets: HashMap<String, f64>,
 }
