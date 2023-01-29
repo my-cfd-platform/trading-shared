@@ -106,6 +106,33 @@ pub struct PendingPosition {
     pub open_invest_amounts: HashMap<String, f64>,
 }
 
+impl PendingPosition {
+    pub fn close(
+        self,
+        bidasks: &HashMap<String, BidAsk>,
+        reason: ClosePositionReason,
+    ) -> ClosedPosition {
+        let invest_amounts = self.order.calculate_invest_amounts(bidasks);
+        let close_price = get_close_price(bidasks, &self.order.instrument, &self.order.side);
+
+        return ClosedPosition {
+            pnl: 0.0,
+            asset_pnls: HashMap::new(),
+            open_date: self.open_date,
+            open_invest_amounts: self.open_invest_amounts,
+            activate_date: None,
+            activate_price: None,
+            activate_invest_amounts: HashMap::new(),
+            close_date: Utc::now(),
+            close_price,
+            close_reason: reason,
+            close_invest_amounts: invest_amounts,
+            order: self.order,
+            id: self.id,
+        };
+    }
+}
+
 pub struct ActivePosition {
     pub id: String,
     pub order: Order,
@@ -131,8 +158,8 @@ impl ActivePosition {
             asset_pnls: self.calculate_asset_pnls(&invest_amounts, close_price),
             open_date: self.open_date,
             open_invest_amounts: self.open_invest_amounts,
-            activate_date: self.activate_date,
-            activate_price: self.activate_price,
+            activate_date: Some(self.activate_date),
+            activate_price: Some(self.activate_price),
             activate_invest_amounts: self.activate_invest_amounts,
             close_date: Utc::now(),
             close_price,
@@ -192,8 +219,8 @@ pub struct ClosedPosition {
     pub order: Order,
     pub open_date: DateTime<Utc>,
     pub open_invest_amounts: HashMap<String, f64>,
-    pub activate_price: f64,
-    pub activate_date: DateTime<Utc>,
+    pub activate_price: Option<f64>,
+    pub activate_date: Option<DateTime<Utc>>,
     pub activate_invest_amounts: HashMap<String, f64>,
     pub close_price: f64,
     pub close_date: DateTime<Utc>,
