@@ -1,4 +1,4 @@
-use crate::positions::{BidAsk, Position};
+use crate::{positions::{BidAsk, Position}};
 use std::{collections::HashMap, mem};
 
 pub struct BidAsksCache {
@@ -23,13 +23,13 @@ impl BidAsksCache {
         }
     }
 
-    pub fn find(&self, instrument: &str) -> Option<&BidAsk> {
+    pub fn get(&self, instrument: &str) -> Option<&BidAsk> {
         let bidask = self.bidasks_by_instruments.get(instrument);
 
         return bidask;
     }
 
-    pub fn get(&self, base_asset: &str, assets: &[&String]) -> HashMap<String, BidAsk> {
+    pub fn find(&self, base_asset: &str, assets: &[&String]) -> HashMap<String, BidAsk> {
         let mut bidasks = HashMap::with_capacity(assets.len());
 
         for asset in assets.iter() {
@@ -38,6 +38,21 @@ impl BidAsksCache {
 
             if let Some(bidask) = bidask {
                 bidasks.insert(instrument, bidask.clone());
+            }
+        }
+
+        return bidasks;
+    }
+
+    pub fn find_prices(&self, to_asset: &str, from_assets: &[&String]) -> HashMap<String, f64> {
+        let mut bidasks = HashMap::with_capacity(from_assets.len());
+
+        for asset in from_assets.iter() {
+            let instrument = BidAsk::generate_id(asset, to_asset);
+            let bidask = self.bidasks_by_instruments.get(&instrument);
+
+            if let Some(bidask) = bidask {
+                bidasks.insert(instrument, bidask.ask);
             }
         }
 

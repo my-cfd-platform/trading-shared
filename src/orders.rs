@@ -1,6 +1,5 @@
 use crate::{
-    calculations::get_open_price,
-    positions::{ActivePosition, BidAsk, PendingPosition, Position},
+    positions::{ActivePosition, PendingPosition, Position},
 };
 use chrono::{DateTime, Duration, Utc};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
@@ -88,78 +87,55 @@ impl Order {
         Uuid::new_v4().to_string()
     }
 
-    pub fn open(self, bidasks: &HashMap<String, BidAsk>) -> Position {
-        let open_price = get_open_price(bidasks, &self.instrument, &self.side);
-
+    pub fn open(self, price: f64, asset_prices: &HashMap<String, f64>) -> Position {
         if let Some(desired_price) = self.desire_price {
-            if open_price >= desired_price {
-                return Position::Active(self.into_active(bidasks));
+            if price >= desired_price {
+                return Position::Active(self.into_active(price, asset_prices));
             }
 
-            return Position::Pending(self.into_pending(bidasks));
+            return Position::Pending(self.into_pending(asset_prices));
         }
 
-        Position::Active(self.into_active(bidasks))
+        Position::Active(self.into_active(price, asset_prices))
     }
 
     pub fn calculate_volume(&self, invest_amount: f64) -> f64 {
         invest_amount * self.leverage
     }
 
-    pub fn calculate_invest_amount(&self, bidasks_by_instruments: &HashMap<String, BidAsk>) -> f64 {
-        let mut amount = 0.0;
+    pub fn calculate_invest_amount(&self, asset_prices: &HashMap<String, f64>) -> f64 {
+        let mut total_amount = 0.0;
 
-        for (invest_asset, invest_amount) in self.invest_assets.iter() {
-            // todo: generate by instrument model
-            let instrument = format!("{}{}", invest_asset, self.base_asset);
-            let bidask = bidasks_by_instruments
-                .get(&instrument)
-                .expect(&format!("BidAsk not found for {}", self.instrument));
-            let asset_amount = bidask.ask * invest_amount;
-            amount += asset_amount;
+        for (asset, amount) in self.invest_assets.iter() {
+            let price = asset_prices
+                .get(asset)
+                .expect(&format!("Price not found for {}", asset));
+            let estimated_amount = price * amount;
+            total_amount += estimated_amount;
         }
 
-        amount
+        total_amount
     }
 
-    pub fn calculate_invest_amounts(
-        &self,
-        bidasks: &HashMap<String, BidAsk>,
-    ) -> HashMap<String, f64> {
-        let mut amounts = HashMap::with_capacity(self.invest_assets.len());
-
-        for (invest_asset, invest_amount) in self.invest_assets.iter() {
-            let instrument = BidAsk::generate_id(invest_asset, &self.base_asset);
-            let bidask = bidasks
-                .get(&instrument)
-                .expect(&format!("BidAsk not found for {}", instrument));
-            let estimated_amount = bidask.ask * invest_amount;
-            amounts.insert(invest_asset.to_owned(), estimated_amount);
-        }
-
-        amounts
-    }
-
-    fn into_active(self, bidasks: &HashMap<String, BidAsk>) -> ActivePosition {
+    fn into_active(self, price: f64, asset_prices: &HashMap<String, f64>) -> ActivePosition {
         let now = Utc::now();
-        let invest_amounts = self.calculate_invest_amounts(bidasks);
 
         ActivePosition {
             id: Position::generate_id(),
             open_date: now,
-            open_invest_amounts: invest_amounts.clone(),
-            activate_price: get_open_price(bidasks, &self.instrument, &self.side),
+            open_asset_prices: asset_prices.to_owned(),
+            activate_price: price,
             activate_date: now,
-            activate_invest_amounts: invest_amounts,
+            activate_asset_prices: asset_prices.to_owned(),
             order: self,
         }
     }
 
-    fn into_pending(self, bidasks: &HashMap<String, BidAsk>) -> PendingPosition {
+    fn into_pending(self, asset_prices: &HashMap<String, f64>) -> PendingPosition {
         PendingPosition {
             id: Position::generate_id(),
             open_date: Utc::now(),
-            open_invest_amounts: self.calculate_invest_amounts(bidasks),
+            open_asset_prices: asset_prices.to_owned(),
             order: self,
         }
     }

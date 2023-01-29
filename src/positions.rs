@@ -1,5 +1,5 @@
 use crate::{
-    calculations::{calculate_margin_percent, get_close_price},
+    calculations::{calculate_margin_percent},
     orders::{Order, OrderSide},
 };
 use chrono::{DateTime, Utc};
@@ -66,11 +66,11 @@ impl Position {
         }
     }
 
-    pub fn get_open_invest_amounts(&self) -> &HashMap<String, f64> {
+    pub fn get_open_asset_prices(&self) -> &HashMap<String, f64> {
         match self {
-            Position::Active(position) => &position.open_invest_amounts,
-            Position::Closed(position) => &position.open_invest_amounts,
-            Position::Pending(position) => &position.open_invest_amounts,
+            Position::Active(position) => &position.open_asset_prices,
+            Position::Closed(position) => &position.open_asset_prices,
+            Position::Pending(position) => &position.open_asset_prices,
         }
     }
 
@@ -103,30 +103,28 @@ pub struct PendingPosition {
     pub id: String,
     pub order: Order,
     pub open_date: DateTime<Utc>,
-    pub open_invest_amounts: HashMap<String, f64>,
+    pub open_asset_prices: HashMap<String, f64>,
 }
 
 impl PendingPosition {
     pub fn close(
         self,
-        bidasks: &HashMap<String, BidAsk>,
+        close_price: f64,
+        asset_prices: &HashMap<String, f64>,
         reason: ClosePositionReason,
     ) -> ClosedPosition {
-        let invest_amounts = self.order.calculate_invest_amounts(bidasks);
-        let close_price = get_close_price(bidasks, &self.order.instrument, &self.order.side);
-
         return ClosedPosition {
             pnl: None,
-            pnl_assets: HashMap::new(),
+            asset_pnls: HashMap::new(),
             open_date: self.open_date,
-            open_invest_amounts: self.open_invest_amounts,
+            open_asset_prices: self.open_asset_prices,
             activate_date: None,
             activate_price: None,
-            activate_invest_amounts: HashMap::new(),
+            activate_asset_prices: HashMap::new(),
             close_date: Utc::now(),
             close_price,
             close_reason: reason,
-            close_invest_amounts: invest_amounts,
+            close_asset_prices: asset_prices.to_owned(),
             order: self.order,
             id: self.id,
         };
@@ -137,34 +135,33 @@ pub struct ActivePosition {
     pub id: String,
     pub order: Order,
     pub open_date: DateTime<Utc>,
-    pub open_invest_amounts: HashMap<String, f64>,
+    pub open_asset_prices: HashMap<String, f64>,
     pub activate_price: f64,
     pub activate_date: DateTime<Utc>,
-    pub activate_invest_amounts: HashMap<String, f64>,
+    pub activate_asset_prices: HashMap<String, f64>,
 }
 
 impl ActivePosition {
     pub fn close(
         self,
-        bidasks: &HashMap<String, BidAsk>,
+        close_price: f64,
+        asset_prices: &HashMap<String, f64>,
         reason: ClosePositionReason,
     ) -> ClosedPosition {
-        let invest_amounts = self.order.calculate_invest_amounts(bidasks);
-        let close_price = get_close_price(bidasks, &self.order.instrument, &self.order.side);
-        let total_invest_amount = invest_amounts.values().sum();
+        let invest_amount = self.order.calculate_invest_amount(asset_prices);
 
         return ClosedPosition {
-            pnl: Some(self.calculate_pnl(total_invest_amount, close_price)),
-            pnl_assets: self.calculate_asset_pnls(&invest_amounts, close_price),
+            pnl: Some(self.calculate_pnl(invest_amount, close_price)),
+            asset_pnls: self.calculate_asset_pnls(invest_amount, &asset_prices, close_price),
             open_date: self.open_date,
-            open_invest_amounts: self.open_invest_amounts,
+            open_asset_prices: self.open_asset_prices,
             activate_date: Some(self.activate_date),
             activate_price: Some(self.activate_price),
-            activate_invest_amounts: self.activate_invest_amounts,
+            activate_asset_prices: self.activate_asset_prices,
             close_date: Utc::now(),
             close_price,
             close_reason: reason,
-            close_invest_amounts: invest_amounts,
+            close_asset_prices: asset_prices.to_owned(),
             order: self.order,
             id: self.id,
         };
@@ -197,17 +194,19 @@ impl ActivePosition {
 
     fn calculate_asset_pnls(
         &self,
-        invest_amounts: &HashMap<String, f64>,
+        invest_amount: f64,
+        asset_prices: &HashMap<String, f64>,
         close_price: f64,
     ) -> HashMap<String, f64> {
         let mut pnls_by_assets = HashMap::with_capacity(self.order.invest_assets.len());
-        let total_investment = invest_amounts.values().sum();
-        let pnl = self.calculate_pnl(total_investment, close_price);
+        let pnl = self.calculate_pnl(invest_amount, close_price);
 
-        for (asset, amount) in invest_amounts {
-            let percent = amount / total_investment * 100.0;
-            let asset_pnl = pnl * percent / 100.0;
-            pnls_by_assets.insert(asset.to_owned(), asset_pnl);
+        for (asset, amount) in self.order.invest_assets.iter() {
+            let percent = amount / invest_amount * 100.0;
+            let pnl_amount_in_base_asset = pnl * percent / 100.0;
+            let asset_price = asset_prices.get(asset).expect("Failed to get asset price");
+            let pnl_amount_in_asset = pnl_amount_in_base_asset * asset_price;
+            pnls_by_assets.insert(asset.to_owned(), pnl_amount_in_asset);
         }
 
         pnls_by_assets
@@ -218,14 +217,14 @@ pub struct ClosedPosition {
     pub id: String,
     pub order: Order,
     pub open_date: DateTime<Utc>,
-    pub open_invest_amounts: HashMap<String, f64>,
+    pub open_asset_prices: HashMap<String, f64>,
     pub activate_price: Option<f64>,
     pub activate_date: Option<DateTime<Utc>>,
-    pub activate_invest_amounts: HashMap<String, f64>,
+    pub activate_asset_prices: HashMap<String, f64>,
     pub close_price: f64,
     pub close_date: DateTime<Utc>,
     pub close_reason: ClosePositionReason,
-    pub close_invest_amounts: HashMap<String, f64>,
+    pub close_asset_prices: HashMap<String, f64>,
     pub pnl: Option<f64>,
-    pub pnl_assets: HashMap<String, f64>,
+    pub asset_pnls: HashMap<String, f64>,
 }
