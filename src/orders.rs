@@ -27,6 +27,13 @@ pub struct Order {
 
 #[derive(Clone, IntoPrimitive, TryFromPrimitive)]
 #[repr(i32)]
+pub enum OrderType {
+    Market = 0,
+    Limit = 1,
+}
+
+#[derive(Clone, IntoPrimitive, TryFromPrimitive)]
+#[repr(i32)]
 pub enum OrderSide {
     Buy = 0,
     Sell = 1,
@@ -83,6 +90,14 @@ pub enum AutoClosePositionUnit {
 }
 
 impl Order {
+    pub fn get_type(&self) -> OrderType {
+        if self.desire_price.is_some() {
+            OrderType::Limit
+        } else {
+            OrderType::Market
+        }
+    }
+
     pub fn generate_id() -> String {
         Uuid::new_v4().to_string()
     }
