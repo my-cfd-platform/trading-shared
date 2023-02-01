@@ -104,6 +104,14 @@ impl Order {
     }
 
     pub fn open(self, price: f64, asset_prices: &HashMap<String, f64>) -> Position {
+        for (asset, _amount) in self.invest_assets.iter() {
+            let price = asset_prices.get(asset);
+
+            if price.is_none() {
+                panic!("Can't open order. No price for {}", asset);
+            }            
+        }
+
         if let Some(desired_price) = self.desire_price {
             if price >= desired_price {
                 return Position::Active(self.into_active(price, asset_prices));

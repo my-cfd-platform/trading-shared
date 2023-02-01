@@ -45,18 +45,22 @@ impl BidAsksCache {
     }
 
     pub fn find_prices(&self, to_asset: &str, from_assets: &[&String]) -> HashMap<String, f64> {
-        let mut bidasks = HashMap::with_capacity(from_assets.len());
+        let mut prices = HashMap::with_capacity(from_assets.len());
 
-        for asset in from_assets.iter() {
+        for asset in from_assets.into_iter() {
+            if *asset == to_asset {
+                prices.insert((*asset).to_owned(), 1.0);
+            }
+
             let instrument = BidAsk::generate_id(asset, to_asset);
             let bidask = self.bidasks_by_instruments.get(&instrument);
 
             if let Some(bidask) = bidask {
-                bidasks.insert(instrument, bidask.ask);
+                prices.insert((*asset).to_owned(), bidask.ask);
             }
         }
 
-        return bidasks;
+        return prices;
     }
 }
 
