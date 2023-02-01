@@ -33,7 +33,7 @@ pub enum OrderType {
     Limit = 1,
 }
 
-#[derive(Clone, IntoPrimitive, TryFromPrimitive)]
+#[derive(PartialEq, Clone, IntoPrimitive, TryFromPrimitive)]
 #[repr(i32)]
 pub enum OrderSide {
     Buy = 0,
@@ -113,7 +113,11 @@ impl Order {
         }
 
         if let Some(desired_price) = self.desire_price {
-            if price >= desired_price {
+            if price >= desired_price && self.side == OrderSide::Sell {
+                return Position::Active(self.into_active(price, asset_prices));
+            }
+
+            if price <= desired_price && self.side == OrderSide::Buy {
                 return Position::Active(self.into_active(price, asset_prices));
             }
 
