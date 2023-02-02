@@ -1,5 +1,5 @@
 use crate::{
-    calculations::{calculate_margin_percent},
+    calculations::calculate_margin_percent,
     orders::{Order, OrderSide},
 };
 use chrono::{DateTime, Utc};
@@ -202,10 +202,10 @@ impl ActivePosition {
         let pnl = self.calculate_pnl(invest_amount, close_price);
 
         for (asset, amount) in self.order.invest_assets.iter() {
-            let percent = amount / invest_amount * 100.0;
-            let pnl_amount_in_base_asset = pnl * percent / 100.0;
             let asset_price = asset_prices.get(asset).expect("Failed to get asset price");
-            let pnl_amount_in_asset = pnl_amount_in_base_asset * asset_price;
+            let percent = amount * asset_price / invest_amount * 100.0;
+            let pnl_amount_in_base_asset = pnl * percent / 100.0;
+            let pnl_amount_in_asset = pnl_amount_in_base_asset / asset_price;
             pnls_by_assets.insert(asset.to_owned(), pnl_amount_in_asset);
         }
 
@@ -227,4 +227,57 @@ pub struct ClosedPosition {
     pub close_asset_prices: HashMap<String, f64>,
     pub pnl: Option<f64>,
     pub asset_pnls: HashMap<String, f64>,
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use chrono::Utc;
+
+    use crate::{orders::Order, positions::Position};
+
+    use super::ClosePositionReason;
+
+    #[tokio::test]
+    async fn close_active_position() {
+        let order = Order {
+            base_asset: "USDT".to_string(),
+            id: "test".to_string(),
+            instrument: "ATOMUSDT".to_string(),
+            trader_id: "test".to_string(),
+            wallet_id: "test".to_string(),
+            created_date: Utc::now(),
+            desire_price: None,
+            funding_fee_period: None,
+            invest_assets: HashMap::from([("BTC".to_string(), 100.0)]),
+            leverage: 1.0,
+            side: crate::orders::OrderSide::Buy,
+            take_profit: None,
+            stop_loss: None,
+            stop_out_percent: 10.0,
+            margin_call_percent: 10.0,
+            top_up_enabled: false,
+            top_up_percent: 10.0,
+        };
+        let prices = HashMap::from([("BTC".to_string(), 22300.0)]);
+        let position = order.open(14.748, &prices);
+        let position = match position {
+            Position::Active(position) => position,
+            _ => {
+                panic!("Invalid position")
+            }
+        };
+
+        let closed_position = position.close(14.75, &prices, ClosePositionReason::ClientCommand);
+
+
+        let pnl = closed_position.pnl.unwrap();
+        let asset_pnl = *closed_position.asset_pnls.get("BTC").unwrap();
+        println!("pnl: {:?}", pnl);
+        println!("asset_pnl: {:?}", asset_pnl);
+
+        assert_ne!(pnl, asset_pnl);
+        assert_eq!(302.41388662883173, pnl);
+    }
 }
