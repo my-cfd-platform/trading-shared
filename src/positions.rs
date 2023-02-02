@@ -1,6 +1,6 @@
 use crate::{
     calculations::calculate_margin_percent,
-    orders::{Order, OrderSide},
+    orders::{Order, OrderSide, TakeProfitConfig, StopLossConfig},
 };
 use chrono::{DateTime, Utc};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
@@ -89,14 +89,6 @@ impl Position {
             Position::Pending(position) => &position.order,
         }
     }
-
-    pub fn get_order_mut(&mut self) -> &mut Order {
-        match self {
-            Position::Active(position) => &mut position.order,
-            Position::Closed(position) => &mut position.order,
-            Position::Pending(position) => &mut position.order,
-        }
-    }
 }
 
 pub struct PendingPosition {
@@ -107,6 +99,10 @@ pub struct PendingPosition {
 }
 
 impl PendingPosition {
+    pub fn set_desire_price(&mut self, value: f64) {
+        self.order.desire_price = Some(value);
+    }
+
     pub fn close(
         self,
         close_price: f64,
@@ -142,6 +138,14 @@ pub struct ActivePosition {
 }
 
 impl ActivePosition {
+    pub fn set_take_profit(&mut self, value: Option<TakeProfitConfig>) {
+        self.order.take_profit = value;
+    }
+
+    pub fn set_stop_loss(&mut self, value: Option<StopLossConfig>) {
+        self.order.stop_loss = value;
+    }
+
     pub fn close(
         self,
         close_price: f64,
