@@ -99,6 +99,14 @@ pub struct PendingPosition {
 }
 
 impl PendingPosition {
+    pub fn set_take_profit(&mut self, value: Option<TakeProfitConfig>) {
+        self.order.take_profit = value;
+    }
+
+    pub fn set_stop_loss(&mut self, value: Option<StopLossConfig>) {
+        self.order.stop_loss = value;
+    }
+    
     pub fn set_desire_price(&mut self, value: f64) {
         self.order.desire_price = Some(value);
     }
