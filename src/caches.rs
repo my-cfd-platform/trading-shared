@@ -94,7 +94,7 @@ impl PositionsCache {
         }
     }
 
-    pub fn find_by_id(&self, wallet_id: &str, position_id: &str) -> Option<&Position> {
+    pub fn get_by_id(&self, wallet_id: &str, position_id: &str) -> Option<&Position> {
         let wallet_positions = self.positions_by_wallets.get(wallet_id);
 
         if let Some(wallet_positions) = wallet_positions {
@@ -106,7 +106,7 @@ impl PositionsCache {
         None
     }
 
-    pub fn find_by_wallet_id(&self, wallet_id: &str) -> Vec<&Position> {
+    pub fn get_by_wallet_id(&self, wallet_id: &str) -> Vec<&Position> {
         let wallet_positions = self.positions_by_wallets.get(wallet_id);
 
         if let Some(wallet_positions) = wallet_positions {
