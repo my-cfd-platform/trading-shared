@@ -106,7 +106,7 @@ impl PendingPosition {
     pub fn set_stop_loss(&mut self, value: Option<StopLossConfig>) {
         self.order.stop_loss = value;
     }
-    
+
     pub fn set_desire_price(&mut self, value: f64) {
         self.order.desire_price = Some(value);
     }
@@ -283,13 +283,10 @@ mod tests {
 
         let closed_position = position.close(14.75, &prices, ClosePositionReason::ClientCommand);
 
-
         let pnl = closed_position.pnl.unwrap();
         let asset_pnl = *closed_position.asset_pnls.get("BTC").unwrap();
-        println!("pnl: {:?}", pnl);
-        println!("asset_pnl: {:?}", asset_pnl);
-
         assert_ne!(pnl, asset_pnl);
         assert_eq!(302.41388662883173, pnl);
+        assert_eq!(0.01356116083537362, asset_pnl);
     }
 }
