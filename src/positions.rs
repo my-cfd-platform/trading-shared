@@ -1,6 +1,6 @@
 use crate::{
     calculations::calculate_margin_percent,
-    orders::{Order, OrderSide, TakeProfitConfig, StopLossConfig},
+    orders::{Order, OrderSide, StopLossConfig, TakeProfitConfig},
 };
 use chrono::{DateTime, Utc};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
@@ -99,6 +99,25 @@ pub struct PendingPosition {
 }
 
 impl PendingPosition {
+    pub fn try_activate(self, price: f64, asset_prices: &HashMap<String, f64>) -> Position {
+        self.order.validate_prices(asset_prices);
+
+        if let Some(desired_price) = self.order.desire_price {
+            if price >= desired_price && self.order.side == OrderSide::Sell {
+                return Position::Active(self.into_active(price, asset_prices));
+            }
+
+            if price <= desired_price && self.order.side == OrderSide::Buy {
+                return Position::Active(self.into_active(price, asset_prices));
+            }
+
+            return Position::Pending(self);
+        }
+        else {
+            panic!("PendingPosition without desire price");
+        }
+    }
+
     pub fn set_take_profit(&mut self, value: Option<TakeProfitConfig>) {
         self.order.take_profit = value;
     }
@@ -132,6 +151,18 @@ impl PendingPosition {
             order: self.order,
             id: self.id,
         };
+    }
+
+    fn into_active(self, price: f64, asset_prices: &HashMap<String, f64>) -> ActivePosition {
+        ActivePosition {
+            id: self.id,
+            open_date: self.open_date,
+            open_asset_prices: self.open_asset_prices,
+            activate_price: price,
+            activate_date: Utc::now(),
+            activate_asset_prices: asset_prices.to_owned(),
+            order: self.order,
+        }
     }
 }
 
@@ -204,10 +235,7 @@ impl ActivePosition {
         pnl
     }
 
-    fn calculate_asset_pnls(
-        &self,
-        close_price: f64,
-    ) -> HashMap<String, f64> {
+    fn calculate_asset_pnls(&self, close_price: f64) -> HashMap<String, f64> {
         let mut pnls_by_assets = HashMap::with_capacity(self.order.invest_assets.len());
 
         for (asset, amount) in self.order.invest_assets.iter() {

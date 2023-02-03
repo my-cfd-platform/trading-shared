@@ -1,6 +1,4 @@
-use crate::{
-    positions::{ActivePosition, PendingPosition, Position},
-};
+use crate::positions::{ActivePosition, PendingPosition, Position};
 use chrono::{DateTime, Duration, Utc};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use std::collections::HashMap;
@@ -103,28 +101,29 @@ impl Order {
         Uuid::new_v4().to_string()
     }
 
-    pub fn open(self, price: f64, asset_prices: &HashMap<String, f64>) -> Position {
+    pub fn validate_prices(&self, asset_prices: &HashMap<String, f64>) {
         for (asset, _amount) in self.invest_assets.iter() {
             let price = asset_prices.get(asset);
 
             if price.is_none() {
                 panic!("Can't open order. No price for {}", asset);
-            }            
-        }
-
-        if let Some(desired_price) = self.desire_price {
-            if price >= desired_price && self.side == OrderSide::Sell {
-                return Position::Active(self.into_active(price, asset_prices));
             }
-
-            if price <= desired_price && self.side == OrderSide::Buy {
-                return Position::Active(self.into_active(price, asset_prices));
-            }
-
-            return Position::Pending(self.into_pending(asset_prices));
         }
+    }
 
-        Position::Active(self.into_active(price, asset_prices))
+    pub fn open(self, price: f64, asset_prices: &HashMap<String, f64>) -> Position {
+        self.validate_prices(asset_prices);
+
+        let position = match self.get_type() {
+            OrderType::Market => Position::Active(self.into_active(price, asset_prices)),
+            OrderType::Limit => {
+                let pending_position = self.into_pending(asset_prices);
+
+                pending_position.try_activate(price, asset_prices)
+            }
+        };
+
+        position
     }
 
     pub fn calculate_volume(&self, invest_amount: f64) -> f64 {
