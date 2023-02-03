@@ -89,6 +89,30 @@ impl Position {
             Position::Pending(position) => &position.order,
         }
     }
+
+    pub fn set_state(&self) -> PositionState {
+        match self {
+            Position::Pending(_position) => PositionState::Pending,
+            Position::Active(_position) => PositionState::Pending,
+            Position::Closed(position) => {
+                if position.activate_date.is_some() {
+                    PositionState::Filled
+                } else {
+                    PositionState::Canceled
+                }
+            },
+
+        }
+    }
+}
+
+#[derive(Clone, IntoPrimitive, TryFromPrimitive)]
+#[repr(i32)]
+pub enum PositionState {
+    Pending = 0,
+    Active = 1,
+    Filled = 2,
+    Canceled = 3,
 }
 
 pub struct PendingPosition {
