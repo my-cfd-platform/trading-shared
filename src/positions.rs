@@ -90,7 +90,7 @@ impl Position {
         }
     }
 
-    pub fn set_state(&self) -> PositionState {
+    pub fn get_state(&self) -> PositionState {
         match self {
             Position::Pending(_position) => PositionState::Pending,
             Position::Active(_position) => PositionState::Pending,
