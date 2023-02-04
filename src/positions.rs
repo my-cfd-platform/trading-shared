@@ -100,8 +100,7 @@ impl Position {
                 } else {
                     PositionStatus::Canceled
                 }
-            },
-
+            }
         }
     }
 }
@@ -136,8 +135,7 @@ impl PendingPosition {
             }
 
             return Position::Pending(self);
-        }
-        else {
+        } else {
             panic!("PendingPosition without desire price");
         }
     }
@@ -234,14 +232,66 @@ impl ActivePosition {
         };
     }
 
-    pub fn is_stop_out(&self, invest_amount: f64, close_price: f64) -> bool {
+    pub fn try_close(self, asset_prices: &HashMap<String, f64>, close_price: f64) -> Position {
+        if self.is_stop_out(asset_prices, close_price) {
+            return Position::Closed(self.close(
+                close_price,
+                asset_prices,
+                ClosePositionReason::StopOut,
+            ));
+        }
+
+        if self.is_stop_loss(asset_prices, close_price) {
+            return Position::Closed(self.close(
+                close_price,
+                asset_prices,
+                ClosePositionReason::StopLoss,
+            ));
+        }
+
+        if self.is_take_profit(asset_prices, close_price) {
+            return Position::Closed(self.close(
+                close_price,
+                asset_prices,
+                ClosePositionReason::TakeProfit,
+            ));
+        }
+
+        Position::Active(self)
+    }
+
+    fn is_take_profit(&self, asset_prices: &HashMap<String, f64>, close_price: f64) -> bool {
+        if let Some(take_profit_config) = self.order.take_profit.as_ref() {
+            let invest_amount = self.order.calculate_invest_amount(asset_prices);
+            let pnl = self.calculate_pnl(invest_amount, close_price);
+
+            take_profit_config.is_triggered(pnl, close_price, &self.order.side)
+        } else {
+            false
+        }
+    }
+
+    fn is_stop_loss(&self, asset_prices: &HashMap<String, f64>, close_price: f64) -> bool {
+        if let Some(stop_loss_config) = self.order.stop_loss.as_ref() {
+            let invest_amount = self.order.calculate_invest_amount(asset_prices);
+            let pnl = self.calculate_pnl(invest_amount, close_price);
+
+            stop_loss_config.is_triggered(pnl, close_price, &self.order.side)
+        } else {
+            false
+        }
+    }
+
+    fn is_stop_out(&self, asset_prices: &HashMap<String, f64>, close_price: f64) -> bool {
+        let invest_amount = self.order.calculate_invest_amount(asset_prices);
         let pnl = self.calculate_pnl(invest_amount, close_price);
         let margin_percent = calculate_margin_percent(invest_amount, pnl);
 
         100.0 - margin_percent >= self.order.stop_out_percent
     }
 
-    pub fn is_margin_call(&self, invest_amount: f64, close_price: f64) -> bool {
+    pub fn is_margin_call(&self, asset_prices: &HashMap<String, f64>, close_price: f64) -> bool {
+        let invest_amount = self.order.calculate_invest_amount(asset_prices);
         let pnl = self.calculate_pnl(invest_amount, close_price);
         let margin_percent = calculate_margin_percent(invest_amount, pnl);
 
