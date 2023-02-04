@@ -232,7 +232,7 @@ impl ActivePosition {
         };
     }
 
-    pub fn try_close(self, asset_prices: &HashMap<String, f64>, close_price: f64) -> Position {
+    pub fn try_close(self, close_price: f64, asset_prices: &HashMap<String, f64>) -> Position {
         if self.is_stop_out(asset_prices, close_price) {
             return Position::Closed(self.close(
                 close_price,
