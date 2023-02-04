@@ -90,15 +90,15 @@ impl Position {
         }
     }
 
-    pub fn get_state(&self) -> PositionState {
+    pub fn get_status(&self) -> PositionStatus {
         match self {
-            Position::Pending(_position) => PositionState::Pending,
-            Position::Active(_position) => PositionState::Pending,
+            Position::Pending(_position) => PositionStatus::Pending,
+            Position::Active(_position) => PositionStatus::Pending,
             Position::Closed(position) => {
                 if position.activate_date.is_some() {
-                    PositionState::Filled
+                    PositionStatus::Filled
                 } else {
-                    PositionState::Canceled
+                    PositionStatus::Canceled
                 }
             },
 
@@ -108,7 +108,7 @@ impl Position {
 
 #[derive(Clone, IntoPrimitive, TryFromPrimitive)]
 #[repr(i32)]
-pub enum PositionState {
+pub enum PositionStatus {
     Pending = 0,
     Active = 1,
     Filled = 2,
