@@ -118,9 +118,9 @@ impl Order {
         let position = match self.get_type() {
             OrderType::Market => Position::Active(self.into_active(price, asset_prices)),
             OrderType::Limit => {
-                let pending_position = self.into_pending(asset_prices);
+                let pending_position = self.into_pending(price, asset_prices);
 
-                pending_position.try_activate(price, asset_prices)
+                pending_position.try_activate()
             }
         };
 
@@ -158,15 +158,19 @@ impl Order {
             order: self,
             current_price: price,
             current_asset_prices: asset_prices.to_owned(),
+            last_update_date: Utc::now(),
         }
     }
 
-    fn into_pending(self, asset_prices: &HashMap<String, f64>) -> PendingPosition {
+    fn into_pending(self, price: f64, asset_prices: &HashMap<String, f64>) -> PendingPosition {
         PendingPosition {
             id: Position::generate_id(),
             open_date: Utc::now(),
             open_asset_prices: asset_prices.to_owned(),
             order: self,
+            current_asset_prices: asset_prices.to_owned(),
+            current_price: price,
+            last_update_date: Utc::now(),
         }
     }
 }

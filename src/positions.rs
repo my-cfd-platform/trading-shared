@@ -140,19 +140,60 @@ pub struct PendingPosition {
     pub order: Order,
     pub open_date: DateTime<Utc>,
     pub open_asset_prices: HashMap<String, f64>,
+    pub current_price: f64,
+    pub current_asset_prices: HashMap<String, f64>,
+    pub last_update_date: DateTime<Utc>,
 }
 
 impl PendingPosition {
-    pub fn try_activate(self, price: f64, asset_prices: &HashMap<String, f64>) -> Position {
-        self.order.validate_prices(asset_prices);
+    pub fn update(&mut self, bidask: &BidAsk) {
+        self.try_update_price(bidask);
+        self.try_update_asset_price(bidask);
+        self.last_update_date = Utc::now();
+    }
 
-        if let Some(desired_price) = self.order.desire_price {
-            if price >= desired_price && self.order.side == OrderSide::Sell {
-                return Position::Active(self.into_active(price, asset_prices));
+    fn try_update_price(&mut self, bidask: &BidAsk) {
+        if self.order.instrument == bidask.instrument {
+            self.current_price = bidask.get_close_price(&self.order.side)
+        }
+    }
+
+    fn try_update_asset_price(&mut self, bidask: &BidAsk) {
+        for asset in self.order.invest_assets.keys() {
+            let id = BidAsk::generate_id(asset, &self.order.base_asset);
+
+            if id == bidask.instrument {
+                let price = bidask.get_asset_price(&asset, &OrderSide::Sell);
+                let current_asset_price = self.current_asset_prices.get_mut(asset);
+
+                if let Some(current_asset_price) = current_asset_price {
+                    *current_asset_price = price;
+                } else {
+                    self.current_asset_prices.insert(asset.to_owned(), price);
+                }
             }
+        }
+    }
 
-            if price <= desired_price && self.order.side == OrderSide::Buy {
-                return Position::Active(self.into_active(price, asset_prices));
+    pub fn try_activate(self) -> Position {
+        if let Some(desired_price) = self.order.desire_price {
+            if self.current_price >= desired_price && self.order.side == OrderSide::Sell
+                || self.current_price <= desired_price && self.order.side == OrderSide::Buy
+            {
+                return Position::Active(
+                    ActivePosition {
+                        id: self.id,
+                        open_date: self.open_date,
+                        open_asset_prices: self.open_asset_prices,
+                        activate_price: self.current_price,
+                        activate_date: Utc::now(),
+                        activate_asset_prices: self.current_asset_prices.to_owned(),
+                        order: self.order,
+                        current_price: self.current_price,
+                        current_asset_prices: self.current_asset_prices.to_owned(),
+                        last_update_date: Utc::now(),
+                    },
+                );
             }
 
             return Position::Pending(self);
@@ -195,20 +236,6 @@ impl PendingPosition {
             id: self.id,
         };
     }
-
-    fn into_active(self, price: f64, asset_prices: &HashMap<String, f64>) -> ActivePosition {
-        ActivePosition {
-            id: self.id,
-            open_date: self.open_date,
-            open_asset_prices: self.open_asset_prices,
-            activate_price: price,
-            activate_date: Utc::now(),
-            activate_asset_prices: asset_prices.to_owned(),
-            order: self.order,
-            current_price: price,
-            current_asset_prices: asset_prices.to_owned(),
-        }
-    }
 }
 
 #[derive(Clone)]
@@ -222,6 +249,7 @@ pub struct ActivePosition {
     pub activate_asset_prices: HashMap<String, f64>,
     pub current_price: f64,
     pub current_asset_prices: HashMap<String, f64>,
+    pub last_update_date: DateTime<Utc>,
 }
 
 impl ActivePosition {
