@@ -23,7 +23,7 @@ impl PositionsMonitor {
         self.positions_cache.add(position);
     }
 
-    pub fn get_by_wallet_id(&mut self, wallet_id: &str) -> Vec<Arc<Position>> {
+    pub fn get_by_wallet_id(&self, wallet_id: &str) -> Vec<Arc<Position>> {
         let positions = self.positions_cache.get_by_wallet_id(wallet_id);
 
         positions
