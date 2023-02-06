@@ -1,1 +1,1 @@
-# trading-shared
+# trading-sdk
