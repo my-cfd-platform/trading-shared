@@ -1,5 +1,5 @@
 use crate::{
-    calculations::calculate_margin_percent,
+    calculations::{calculate_margin_percent, calculate_total_amount},
     orders::{Order, OrderSide, StopLossConfig, TakeProfitConfig},
 };
 use chrono::{DateTime, Utc};
@@ -216,8 +216,6 @@ impl PendingPosition {
 
     pub fn close(
         self,
-        close_price: f64,
-        asset_prices: &HashMap<String, f64>,
         reason: ClosePositionReason,
     ) -> ClosedPosition {
         return ClosedPosition {
@@ -229,9 +227,9 @@ impl PendingPosition {
             activate_price: None,
             activate_asset_prices: HashMap::new(),
             close_date: Utc::now(),
-            close_price,
+            close_price: self.current_price,
             close_reason: reason,
-            close_asset_prices: asset_prices.to_owned(),
+            close_asset_prices: self.current_asset_prices.to_owned(),
             order: self.order,
             id: self.id,
         };
@@ -290,13 +288,11 @@ impl ActivePosition {
     }
 
     pub fn close(self, reason: ClosePositionReason) -> ClosedPosition {
-        let invest_amount = self
-            .order
-            .calculate_invest_amount(&self.current_asset_prices);
+        let asset_pnls = self.calculate_asset_pnls();
 
         return ClosedPosition {
-            pnl: Some(self.calculate_pnl(invest_amount)),
-            asset_pnls: self.calculate_asset_pnls(),
+            pnl: Some(calculate_total_amount(&asset_pnls, &self.current_asset_prices)),
+            asset_pnls,
             open_date: self.open_date,
             open_asset_prices: self.open_asset_prices,
             activate_date: Some(self.activate_date),
@@ -384,7 +380,7 @@ impl ActivePosition {
         pnl
     }
 
-    fn calculate_asset_pnls(&self) -> HashMap<String, f64> {
+    pub fn calculate_asset_pnls(&self) -> HashMap<String, f64> {
         let mut pnls_by_assets = HashMap::with_capacity(self.order.invest_assets.len());
 
         for (asset, amount) in self.order.invest_assets.iter() {

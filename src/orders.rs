@@ -1,4 +1,4 @@
-use crate::positions::{ActivePosition, PendingPosition, Position, BidAsk};
+use crate::{positions::{ActivePosition, PendingPosition, Position, BidAsk}, calculations::calculate_total_amount};
 use chrono::{DateTime, Duration, Utc};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use std::collections::HashMap;
@@ -144,17 +144,7 @@ impl Order {
     }
 
     pub fn calculate_invest_amount(&self, asset_prices: &HashMap<String, f64>) -> f64 {
-        let mut total_amount = 0.0;
-
-        for (asset, amount) in self.invest_assets.iter() {
-            let price = asset_prices
-                .get(asset)
-                .expect(&format!("Price not found for {}", asset));
-            let estimated_amount = price * amount;
-            total_amount += estimated_amount;
-        }
-
-        total_amount
+        calculate_total_amount(&self.invest_assets, asset_prices)
     }
 
     fn into_active(self, price: f64, asset_prices: &HashMap<String, f64>) -> ActivePosition {

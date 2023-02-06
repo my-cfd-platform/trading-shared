@@ -33,3 +33,20 @@ pub fn calculate_margin_percent(invest_amount: f64, pnl: f64) -> f64 {
 
     margin_percent
 }
+
+pub fn calculate_total_amount(
+    asset_amounts: &HashMap<String, f64>,
+    asset_prices: &HashMap<String, f64>,
+) -> f64 {
+    let mut total_amount = 0.0;
+
+    for (asset, amount) in asset_amounts.iter() {
+        let price = asset_prices
+            .get(asset)
+            .expect(&format!("Price not found for {}", asset));
+        let estimated_amount = price * amount;
+        total_amount += estimated_amount;
+    }
+
+    total_amount
+}
