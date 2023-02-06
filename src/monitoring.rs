@@ -15,21 +15,21 @@ impl PositionsMonitor {
         }
     }
 
-    pub fn remove_position(&mut self, position_id: &str, wallet_id: &str) -> Option<Position> {
+    pub fn remove(&mut self, position_id: &str, wallet_id: &str) -> Option<Position> {
         return self.positions_cache.remove(position_id, wallet_id);
     }
 
-    pub fn add_position(&mut self, position: Position) {
+    pub fn add(&mut self, position: Position) {
         self.positions_cache.add(position);
     }
 
-    pub fn get_positions(&mut self, wallet_id: &str) -> Vec<Arc<Position>> {
+    pub fn get_by_wallet_id(&mut self, wallet_id: &str) -> Vec<Arc<Position>> {
         let positions = self.positions_cache.get_by_wallet_id(wallet_id);
 
         positions
     }
 
-    pub fn update_positions(&mut self, bidask: &BidAsk) -> Vec<ClosedPosition> {
+    pub fn update(&mut self, bidask: &BidAsk) -> Vec<ClosedPosition> {
         let mut closed_positions = Vec::new();
         let positions = self.positions_cache.get_by_instrument(&bidask.instrument);
 
