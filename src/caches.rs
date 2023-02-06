@@ -56,7 +56,7 @@ impl BidAsksCache {
             let bidask = self.bidasks_by_instruments.get(&instrument);
 
             if let Some(bidask) = bidask {
-                let price = bidask.get_asset_price(asset);
+                let price = bidask.get_asset_price(asset, &crate::orders::OrderSide::Sell);
                 prices.insert((*asset).to_owned(), price);
             }
         }

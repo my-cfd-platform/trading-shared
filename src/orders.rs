@@ -156,6 +156,8 @@ impl Order {
             activate_date: now,
             activate_asset_prices: asset_prices.to_owned(),
             order: self,
+            current_price: price,
+            current_asset_prices: asset_prices.to_owned(),
         }
     }
 

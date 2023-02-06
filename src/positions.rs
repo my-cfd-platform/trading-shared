@@ -46,11 +46,22 @@ impl BidAsk {
         }
     }
 
-    pub fn get_asset_price(&self, asset: &str) -> f64 {
-        if self.instrument.starts_with(asset) {
-            self.ask
-        } else {
-            0.0
+    pub fn get_asset_price(&self, asset: &str, side: &OrderSide) -> f64 {
+        match side {
+            OrderSide::Sell => {
+                if self.instrument.starts_with(asset) {
+                    self.ask
+                } else {
+                    panic!("Invalid instrument {} for asset {}", self.instrument, asset)
+                }
+            }
+            OrderSide::Buy => {
+                if self.instrument.starts_with(asset) {
+                    self.bid
+                } else {
+                    panic!("Invalid instrument {} for asset {}", self.instrument, asset)
+                }
+            }
         }
     }
 }
@@ -194,6 +205,8 @@ impl PendingPosition {
             activate_date: Utc::now(),
             activate_asset_prices: asset_prices.to_owned(),
             order: self.order,
+            current_price: price,
+            current_asset_prices: asset_prices.to_owned(),
         }
     }
 }
@@ -207,6 +220,8 @@ pub struct ActivePosition {
     pub activate_price: f64,
     pub activate_date: DateTime<Utc>,
     pub activate_asset_prices: HashMap<String, f64>,
+    pub current_price: f64,
+    pub current_asset_prices: HashMap<String, f64>,
 }
 
 impl ActivePosition {
@@ -218,113 +233,134 @@ impl ActivePosition {
         self.order.stop_loss = value;
     }
 
-    pub fn close(
-        self,
-        close_price: f64,
-        asset_prices: &HashMap<String, f64>,
-        reason: ClosePositionReason,
-    ) -> ClosedPosition {
-        let invest_amount = self.order.calculate_invest_amount(asset_prices);
+    pub fn update(&mut self, bidask: &BidAsk) {
+        self.try_update_price(bidask);
+        self.try_update_asset_price(bidask);
+    }
+
+    fn try_update_price(&mut self, bidask: &BidAsk) {
+        if self.order.instrument == bidask.instrument {
+            self.current_price = bidask.get_close_price(&self.order.side)
+        }
+    }
+
+    fn try_update_asset_price(&mut self, bidask: &BidAsk) {
+        for asset in self.order.invest_assets.keys() {
+            let id = BidAsk::generate_id(asset, &self.order.base_asset);
+
+            if id == bidask.instrument {
+                let price = bidask.get_asset_price(&asset, &OrderSide::Sell);
+                let current_asset_price = self.current_asset_prices.get_mut(asset);
+
+                if let Some(current_asset_price) = current_asset_price {
+                    *current_asset_price = price;
+                } else {
+                    self.current_asset_prices.insert(asset.to_owned(), price);
+                }
+            }
+        }
+    }
+
+    pub fn close(self, reason: ClosePositionReason) -> ClosedPosition {
+        let invest_amount = self
+            .order
+            .calculate_invest_amount(&self.current_asset_prices);
 
         return ClosedPosition {
-            pnl: Some(self.calculate_pnl(invest_amount, close_price)),
-            asset_pnls: self.calculate_asset_pnls(close_price),
+            pnl: Some(self.calculate_pnl(invest_amount)),
+            asset_pnls: self.calculate_asset_pnls(),
             open_date: self.open_date,
             open_asset_prices: self.open_asset_prices,
             activate_date: Some(self.activate_date),
             activate_price: Some(self.activate_price),
             activate_asset_prices: self.activate_asset_prices,
             close_date: Utc::now(),
-            close_price,
+            close_price: self.current_price,
             close_reason: reason,
-            close_asset_prices: asset_prices.to_owned(),
+            close_asset_prices: self.current_asset_prices.to_owned(),
             order: self.order,
             id: self.id,
         };
     }
 
-    pub fn try_close(self, close_price: f64, asset_prices: &HashMap<String, f64>) -> Position {
-        if self.is_stop_out(asset_prices, close_price) {
-            return Position::Closed(self.close(
-                close_price,
-                asset_prices,
-                ClosePositionReason::StopOut,
-            ));
+    pub fn try_close(self) -> Position {
+        if self.is_stop_out() {
+            return Position::Closed(self.close(ClosePositionReason::StopOut));
         }
 
-        if self.is_stop_loss(asset_prices, close_price) {
-            return Position::Closed(self.close(
-                close_price,
-                asset_prices,
-                ClosePositionReason::StopLoss,
-            ));
+        if self.is_stop_loss() {
+            return Position::Closed(self.close(ClosePositionReason::StopLoss));
         }
 
-        if self.is_take_profit(asset_prices, close_price) {
-            return Position::Closed(self.close(
-                close_price,
-                asset_prices,
-                ClosePositionReason::TakeProfit,
-            ));
+        if self.is_take_profit() {
+            return Position::Closed(self.close(ClosePositionReason::TakeProfit));
         }
 
         Position::Active(self)
     }
 
-    fn is_take_profit(&self, asset_prices: &HashMap<String, f64>, close_price: f64) -> bool {
+    fn is_take_profit(&self) -> bool {
         if let Some(take_profit_config) = self.order.take_profit.as_ref() {
-            let invest_amount = self.order.calculate_invest_amount(asset_prices);
-            let pnl = self.calculate_pnl(invest_amount, close_price);
+            let invest_amount = self
+                .order
+                .calculate_invest_amount(&self.current_asset_prices);
+            let pnl = self.calculate_pnl(invest_amount);
 
-            take_profit_config.is_triggered(pnl, close_price, &self.order.side)
+            take_profit_config.is_triggered(pnl, self.current_price, &self.order.side)
         } else {
             false
         }
     }
 
-    fn is_stop_loss(&self, asset_prices: &HashMap<String, f64>, close_price: f64) -> bool {
+    fn is_stop_loss(&self) -> bool {
         if let Some(stop_loss_config) = self.order.stop_loss.as_ref() {
-            let invest_amount = self.order.calculate_invest_amount(asset_prices);
-            let pnl = self.calculate_pnl(invest_amount, close_price);
+            let invest_amount = self
+                .order
+                .calculate_invest_amount(&self.current_asset_prices);
+            let pnl = self.calculate_pnl(invest_amount);
 
-            stop_loss_config.is_triggered(pnl, close_price, &self.order.side)
+            stop_loss_config.is_triggered(pnl, self.current_price, &self.order.side)
         } else {
             false
         }
     }
 
-    fn is_stop_out(&self, asset_prices: &HashMap<String, f64>, close_price: f64) -> bool {
-        let invest_amount = self.order.calculate_invest_amount(asset_prices);
-        let pnl = self.calculate_pnl(invest_amount, close_price);
+    fn is_stop_out(&self) -> bool {
+        let invest_amount = self
+            .order
+            .calculate_invest_amount(&self.current_asset_prices);
+        let pnl = self.calculate_pnl(invest_amount);
         let margin_percent = calculate_margin_percent(invest_amount, pnl);
 
         100.0 - margin_percent >= self.order.stop_out_percent
     }
 
-    pub fn is_margin_call(&self, asset_prices: &HashMap<String, f64>, close_price: f64) -> bool {
-        let invest_amount = self.order.calculate_invest_amount(asset_prices);
-        let pnl = self.calculate_pnl(invest_amount, close_price);
+    pub fn is_margin_call(&self) -> bool {
+        let invest_amount = self
+            .order
+            .calculate_invest_amount(&self.current_asset_prices);
+        let pnl = self.calculate_pnl(invest_amount);
         let margin_percent = calculate_margin_percent(invest_amount, pnl);
 
         100.0 - margin_percent >= self.order.margin_call_percent
     }
 
-    fn calculate_pnl(&self, invest_amount: f64, close_price: f64) -> f64 {
+    fn calculate_pnl(&self, invest_amount: f64) -> f64 {
         let volume = self.order.calculate_volume(invest_amount);
 
         let pnl = match self.order.side {
-            OrderSide::Buy => (close_price / self.activate_price - 1.0) * volume,
-            OrderSide::Sell => (close_price / self.activate_price - 1.0) * -volume,
+            OrderSide::Buy => (self.current_price / self.activate_price - 1.0) * volume,
+            OrderSide::Sell => (self.current_price / self.activate_price - 1.0) * -volume,
         };
 
         pnl
     }
 
-    fn calculate_asset_pnls(&self, close_price: f64) -> HashMap<String, f64> {
+    fn calculate_asset_pnls(&self) -> HashMap<String, f64> {
         let mut pnls_by_assets = HashMap::with_capacity(self.order.invest_assets.len());
 
         for (asset, amount) in self.order.invest_assets.iter() {
-            let pnl = self.calculate_pnl(*amount, close_price);
+            let pnl = self.calculate_pnl(*amount);
             pnls_by_assets.insert(asset.to_owned(), pnl);
         }
 
@@ -382,17 +418,19 @@ mod tests {
         };
         let prices = HashMap::from([("BTC".to_string(), 22300.0)]);
         let position = order.open(14.748, &prices);
-        let position = match position {
+        let mut position = match position {
             Position::Active(position) => position,
             _ => {
                 panic!("Invalid position")
             }
         };
 
-        let closed_position = position.close(14.75, &prices, ClosePositionReason::ClientCommand);
+        position.current_price = 14.75;
+        let closed_position = position.close(ClosePositionReason::ClientCommand);
 
         let pnl = closed_position.pnl.unwrap();
         let asset_pnl = *closed_position.asset_pnls.get("BTC").unwrap();
+
         assert_ne!(pnl, asset_pnl);
         assert_eq!(302.41388662883173, pnl);
         assert_eq!(0.01356116083537362, asset_pnl);
