@@ -113,7 +113,7 @@ impl Position {
     pub fn get_status(&self) -> PositionStatus {
         match self {
             Position::Pending(_position) => PositionStatus::Pending,
-            Position::Active(_position) => PositionStatus::Pending,
+            Position::Active(_position) => PositionStatus::Active,
             Position::Closed(position) => {
                 if position.activate_date.is_some() {
                     PositionStatus::Filled
