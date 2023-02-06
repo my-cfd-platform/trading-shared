@@ -4,6 +4,7 @@ use num_enum::{IntoPrimitive, TryFromPrimitive};
 use std::collections::HashMap;
 use uuid::Uuid;
 
+#[derive(Clone)]
 pub struct Order {
     pub id: String,
     pub trader_id: String,

@@ -1,5 +1,5 @@
-use crate::{positions::{BidAsk, Position}};
-use std::{collections::HashMap, mem};
+use crate::positions::{BidAsk, Position};
+use std::{collections::HashMap, mem, rc::Rc};
 
 pub struct BidAsksCache {
     bidasks_by_instruments: HashMap<String, BidAsk>,
@@ -56,7 +56,8 @@ impl BidAsksCache {
             let bidask = self.bidasks_by_instruments.get(&instrument);
 
             if let Some(bidask) = bidask {
-                prices.insert((*asset).to_owned(), bidask.ask);
+                let price = bidask.get_asset_price(asset);
+                prices.insert((*asset).to_owned(), price);
             }
         }
 
@@ -64,69 +65,318 @@ impl BidAsksCache {
     }
 }
 
+pub struct PositionsByIds {
+    positions_by_ids: HashMap<String, Rc<Position>>,
+}
+
+impl PositionsByIds {
+    pub fn new(position: &Rc<Position>) -> Self {
+        Self {
+            positions_by_ids: HashMap::from([(position.get_id().to_owned(), Rc::clone(position))]),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.positions_by_ids.is_empty()
+    }
+
+    pub fn get_all(&self) -> Vec<&Position> {
+        self.positions_by_ids.values().map(|p| p.as_ref()).collect()
+    }
+
+    pub fn add_or_replace(&mut self, position: &Rc<Position>) {
+        let position_id = position.get_id();
+        let mut position = Rc::clone(position);
+
+        if let Some(existing) = self.positions_by_ids.get_mut(position_id) {
+            mem::swap(existing, &mut position);
+        } else {
+            self.positions_by_ids
+                .insert(position_id.to_owned(), position);
+        }
+    }
+
+    pub fn remove(&mut self, id: &str) -> Option<Rc<Position>> {
+        let position = self.positions_by_ids.remove(id);
+
+        if let Some(position) = position {
+            Some(position)
+        } else {
+            None
+        }
+    }
+}
+
 pub struct PositionsCache {
-    positions_by_wallets: HashMap<String, HashMap<String, Position>>,
+    positions_by_wallets: HashMap<String, PositionsByIds>,
+    positions_by_instruments: HashMap<String, PositionsByIds>,
+    positions_by_invest_assets: HashMap<String, PositionsByIds>,
 }
 
 impl PositionsCache {
     pub fn new() -> PositionsCache {
         PositionsCache {
             positions_by_wallets: HashMap::new(),
+            positions_by_instruments: HashMap::new(),
+            positions_by_invest_assets: HashMap::new(),
         }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        if !self.positions_by_wallets.is_empty() {
+            for item in self.positions_by_wallets.values() {
+                if !item.is_empty() {
+                    return false;
+                }
+            }
+        }
+
+        if !self.positions_by_instruments.is_empty() {
+            for item in self.positions_by_instruments.values() {
+                if !item.is_empty() {
+                    return false;
+                }
+            }
+        }
+
+        if !self.positions_by_invest_assets.is_empty() {
+            for item in self.positions_by_invest_assets.values() {
+                if !item.is_empty() {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 
     pub fn add(&mut self, position: Position) {
+        let position = Rc::new(position);
+
+        // add by wallet id
         let wallet_positions = self
             .positions_by_wallets
             .get_mut(&position.get_order().wallet_id);
-        let position_id = position.get_id();
 
         match wallet_positions {
             Some(positions) => {
-                positions.insert(position_id.to_owned(), position);
+                positions.add_or_replace(&position);
             }
             None => {
                 let wallet_id = position.get_order().wallet_id.clone();
-                let positions_by_ids = HashMap::from([(position_id.to_owned(), position)]);
                 self.positions_by_wallets
-                    .insert(wallet_id, positions_by_ids);
+                    .insert(wallet_id, PositionsByIds::new(&position));
             }
         }
-    }
 
-    pub fn get_by_id(&self, wallet_id: &str, position_id: &str) -> Option<&Position> {
-        let wallet_positions = self.positions_by_wallets.get(wallet_id);
+        // add by instrument
+        let instrument_positions = self
+            .positions_by_instruments
+            .get_mut(&position.get_order().instrument);
 
-        if let Some(wallet_positions) = wallet_positions {
-            let position = wallet_positions.get(position_id);
-
-            return position;
+        match instrument_positions {
+            Some(positions) => {
+                positions.add_or_replace(&position);
+            }
+            None => {
+                let instrument = position.get_order().instrument.clone();
+                self.positions_by_instruments
+                    .insert(instrument, PositionsByIds::new(&position));
+            }
         }
 
-        None
+        // add by assets
+        for asset in position.get_order().invest_assets.keys() {
+            let asset_positions = self.positions_by_invest_assets.get_mut(asset);
+
+            match asset_positions {
+                Some(positions) => {
+                    positions.add_or_replace(&position);
+                }
+                None => {
+                    self.positions_by_invest_assets
+                        .insert(asset.clone(), PositionsByIds::new(&position));
+                }
+            }
+        }
     }
 
     pub fn get_by_wallet_id(&self, wallet_id: &str) -> Vec<&Position> {
         let wallet_positions = self.positions_by_wallets.get(wallet_id);
 
         if let Some(wallet_positions) = wallet_positions {
-            return wallet_positions.values().collect();
+            return wallet_positions.get_all();
         }
 
         Vec::new()
     }
 
-    pub fn remove(&mut self, position_id: &str, wallet_id: &str) -> Option<Position> {
+    pub fn get_by_instrument(&self, instrument: &str) -> Vec<&Position> {
+        let positions = self.positions_by_instruments.get(instrument);
+
+        if let Some(positions) = positions {
+            return positions.get_all();
+        }
+
+        Vec::new()
+    }
+
+    pub fn get_by_asset(&self, asset: &str) -> Vec<&Position> {
+        let positions = self.positions_by_invest_assets.get(asset);
+
+        if let Some(positions) = positions {
+            return positions.get_all();
+        }
+
+        Vec::new()
+    }
+
+    pub fn remove(&mut self, position_id: &str, wallet_id: &str) -> Option<Rc<Position>> {
         let wallet_positions = self.positions_by_wallets.get_mut(wallet_id);
 
         let position = match wallet_positions {
             Some(positions) => {
-                let postion = positions.remove(position_id);
+                let position = positions.remove(position_id);
 
-                postion
+                if let Some(position) = position {
+                    let order = position.get_order();
+                    let instrument_positions =
+                        self.positions_by_instruments.get_mut(&order.instrument);
+
+                    if let Some(instrument_positions) = instrument_positions {
+                        instrument_positions.remove(position_id);
+                    }
+
+                    for asset in order.invest_assets.keys() {
+                        let asset_positions = self.positions_by_invest_assets.get_mut(asset);
+
+                        if let Some(asset_positions) = asset_positions {
+                            asset_positions.remove(position_id);
+                        }
+                    }
+
+                    Some(position)
+                } else {
+                    None
+                }
             }
             None => None,
         };
+
+        position
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PositionsCache;
+    use crate::{orders::Order, positions::Position, caches::PositionsByIds};
+    use chrono::Utc;
+    use std::{collections::HashMap, rc::Rc};
+
+    #[test]
+    fn positions_cache_is_empty() {
+        let cache = PositionsCache::new();
+
+        assert!(cache.is_empty());
+    }
+
+    #[test]
+    fn positions_cache_not_empty() {
+        let position = new_position();
+        let cache = PositionsCache {
+            positions_by_wallets: HashMap::from([("s".to_string(), PositionsByIds::new(&Rc::new(position)))]),
+            positions_by_instruments: HashMap::new(),
+            positions_by_invest_assets: HashMap::new(),
+        };
+
+        assert!(!cache.is_empty());
+    }
+
+    #[test]
+    fn positions_cache_add() {
+        let position = new_position();
+        let mut cache = PositionsCache::new();
+
+        cache.add(position.clone());
+
+        assert!(!cache.is_empty());
+    }
+
+    #[test]
+    fn positions_cache_remove() {
+        let position = new_position();
+        let order = position.get_order();
+        let mut cache = PositionsCache::new();
+
+        cache.add(position.clone());
+        cache.remove(position.get_id(), &order.wallet_id);
+
+        assert!(cache.is_empty());
+    }
+
+    #[test]
+    fn positions_cache_get_by_wallet() {
+        let position = new_position();
+        let mut cache = PositionsCache::new();
+
+        cache.add(position.clone());
+        let order = position.get_order();
+        let positions = cache.get_by_wallet_id(&order.wallet_id);
+
+        assert!(!positions.is_empty());
+    }
+
+    #[test]
+    fn positions_cache_get_by_asset() {
+        let position = new_position();
+        let mut cache = PositionsCache::new();
+
+        cache.add(position.clone());
+        let order = position.get_order();
+
+        for asset in order.invest_assets.keys() {
+            let positions = cache.get_by_asset(asset);
+
+            assert!(!positions.is_empty());
+        }
+    }
+
+    #[test]
+    fn positions_cache_get_by_instrument() {
+        let position = new_position();
+        let mut cache = PositionsCache::new();
+
+        cache.add(position.clone());
+        let order = position.get_order();
+        let positions = cache.get_by_instrument(&order.instrument);
+
+        assert!(!positions.is_empty());
+    }
+
+    fn new_position() -> Position {
+        let invest_asset = ("BTC".to_string(), 100.0);
+        let order = Order {
+            base_asset: "USDT".to_string(),
+            id: "test".to_string(),
+            instrument: "ATOMUSDT".to_string(),
+            trader_id: "test".to_string(),
+            wallet_id: "test".to_string(),
+            created_date: Utc::now(),
+            desire_price: None,
+            funding_fee_period: None,
+            invest_assets: HashMap::from([invest_asset.clone()]),
+            leverage: 1.0,
+            side: crate::orders::OrderSide::Buy,
+            take_profit: None,
+            stop_loss: None,
+            stop_out_percent: 10.0,
+            margin_call_percent: 10.0,
+            top_up_enabled: false,
+            top_up_percent: 10.0,
+        };
+        let prices = HashMap::from([("BTC".to_string(), 22300.0)]);
+        let position = order.open(14.748, &prices);
 
         position
     }

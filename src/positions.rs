@@ -45,8 +45,17 @@ impl BidAsk {
             OrderSide::Sell => self.bid,
         }
     }
+
+    pub fn get_asset_price(&self, asset: &str) -> f64 {
+        if self.instrument.starts_with(asset) {
+            self.ask
+        } else {
+            0.0
+        }
+    }
 }
 
+#[derive(Clone)]
 pub enum Position {
     Active(ActivePosition),
     Closed(ClosedPosition),
@@ -114,6 +123,7 @@ pub enum PositionStatus {
     Canceled = 3,
 }
 
+#[derive(Clone)]
 pub struct PendingPosition {
     pub id: String,
     pub order: Order,
@@ -188,6 +198,7 @@ impl PendingPosition {
     }
 }
 
+#[derive(Clone)]
 pub struct ActivePosition {
     pub id: String,
     pub order: Order,
@@ -321,6 +332,7 @@ impl ActivePosition {
     }
 }
 
+#[derive(Clone)]
 pub struct ClosedPosition {
     pub id: String,
     pub order: Order,
