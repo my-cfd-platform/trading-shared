@@ -80,8 +80,11 @@ impl PositionsByIds {
         self.positions_by_ids.is_empty()
     }
 
-    pub fn get_all(&self) -> Vec<&Position> {
-        self.positions_by_ids.values().map(|p| p.as_ref()).collect()
+    pub fn get_all(&self) -> Vec<Rc<Position>> {
+        self.positions_by_ids
+            .values()
+            .map(|p| Rc::clone(&p))
+            .collect()
     }
 
     pub fn add_or_replace(&mut self, position: &Rc<Position>) {
@@ -109,16 +112,16 @@ impl PositionsByIds {
 
 pub struct PositionsCache {
     positions_by_wallets: HashMap<String, PositionsByIds>,
-    positions_by_instruments: HashMap<String, PositionsByIds>,
-    positions_by_invest_assets: HashMap<String, PositionsByIds>,
+    positions_by_order_instruments: HashMap<String, PositionsByIds>,
+    positions_by_invest_intruments: HashMap<String, PositionsByIds>,
 }
 
 impl PositionsCache {
     pub fn new() -> PositionsCache {
         PositionsCache {
             positions_by_wallets: HashMap::new(),
-            positions_by_instruments: HashMap::new(),
-            positions_by_invest_assets: HashMap::new(),
+            positions_by_order_instruments: HashMap::new(),
+            positions_by_invest_intruments: HashMap::new(),
         }
     }
 
@@ -131,16 +134,16 @@ impl PositionsCache {
             }
         }
 
-        if !self.positions_by_instruments.is_empty() {
-            for item in self.positions_by_instruments.values() {
+        if !self.positions_by_order_instruments.is_empty() {
+            for item in self.positions_by_order_instruments.values() {
                 if !item.is_empty() {
                     return false;
                 }
             }
         }
 
-        if !self.positions_by_invest_assets.is_empty() {
-            for item in self.positions_by_invest_assets.values() {
+        if !self.positions_by_invest_intruments.is_empty() {
+            for item in self.positions_by_invest_intruments.values() {
                 if !item.is_empty() {
                     return false;
                 }
@@ -171,7 +174,7 @@ impl PositionsCache {
 
         // add by instrument
         let instrument_positions = self
-            .positions_by_instruments
+            .positions_by_order_instruments
             .get_mut(&position.get_order().instrument);
 
         match instrument_positions {
@@ -180,28 +183,28 @@ impl PositionsCache {
             }
             None => {
                 let instrument = position.get_order().instrument.clone();
-                self.positions_by_instruments
+                self.positions_by_order_instruments
                     .insert(instrument, PositionsByIds::new(&position));
             }
         }
 
-        // add by assets
-        for asset in position.get_order().invest_assets.keys() {
-            let asset_positions = self.positions_by_invest_assets.get_mut(asset);
+        // add by invest instruments
+        for instrument in position.get_order().get_invest_instruments() {
+            let asset_positions = self.positions_by_invest_intruments.get_mut(&instrument);
 
             match asset_positions {
                 Some(positions) => {
                     positions.add_or_replace(&position);
                 }
                 None => {
-                    self.positions_by_invest_assets
-                        .insert(asset.clone(), PositionsByIds::new(&position));
+                    self.positions_by_invest_intruments
+                        .insert(instrument, PositionsByIds::new(&position));
                 }
             }
         }
     }
 
-    pub fn get_by_wallet_id(&self, wallet_id: &str) -> Vec<&Position> {
+    pub fn get_by_wallet_id(&self, wallet_id: &str) -> Vec<Rc<Position>> {
         let wallet_positions = self.positions_by_wallets.get(wallet_id);
 
         if let Some(wallet_positions) = wallet_positions {
@@ -211,8 +214,23 @@ impl PositionsCache {
         Vec::new()
     }
 
-    pub fn get_by_instrument(&self, instrument: &str) -> Vec<&Position> {
-        let positions = self.positions_by_instruments.get(instrument);
+    pub fn get_by_instrument(&self, instrument: &str) -> Vec<Rc<Position>> {
+        let mut all_positions: Vec<Rc<Position>> = Vec::new();
+        let positions = self.positions_by_order_instruments.get(instrument);
+
+        if let Some(positions) = positions {
+            let mut positions = positions.get_all();
+            all_positions.append(&mut positions);
+        }
+
+        let mut positions = self.get_by_invest_instrument(instrument);
+        all_positions.append(&mut positions);
+
+        all_positions
+    }
+
+    fn get_by_invest_instrument(&self, instrument: &str) -> Vec<Rc<Position>> {
+        let positions = self.positions_by_invest_intruments.get(instrument);
 
         if let Some(positions) = positions {
             return positions.get_all();
@@ -221,17 +239,7 @@ impl PositionsCache {
         Vec::new()
     }
 
-    pub fn get_by_asset(&self, asset: &str) -> Vec<&Position> {
-        let positions = self.positions_by_invest_assets.get(asset);
-
-        if let Some(positions) = positions {
-            return positions.get_all();
-        }
-
-        Vec::new()
-    }
-
-    pub fn remove(&mut self, position_id: &str, wallet_id: &str) -> Option<Rc<Position>> {
+    pub fn remove(&mut self, position_id: &str, wallet_id: &str) -> Option<Position> {
         let wallet_positions = self.positions_by_wallets.get_mut(wallet_id);
 
         let position = match wallet_positions {
@@ -240,22 +248,24 @@ impl PositionsCache {
 
                 if let Some(position) = position {
                     let order = position.get_order();
-                    let instrument_positions =
-                        self.positions_by_instruments.get_mut(&order.instrument);
+                    let instrument_positions = self
+                        .positions_by_order_instruments
+                        .get_mut(&order.instrument);
 
                     if let Some(instrument_positions) = instrument_positions {
                         instrument_positions.remove(position_id);
                     }
 
-                    for asset in order.invest_assets.keys() {
-                        let asset_positions = self.positions_by_invest_assets.get_mut(asset);
+                    for instrument in order.get_invest_instruments() {
+                        let asset_positions =
+                            self.positions_by_invest_intruments.get_mut(&instrument);
 
                         if let Some(asset_positions) = asset_positions {
                             asset_positions.remove(position_id);
                         }
                     }
 
-                    Some(position)
+                    Some(position.as_ref().to_owned())
                 } else {
                     None
                 }
@@ -270,7 +280,7 @@ impl PositionsCache {
 #[cfg(test)]
 mod tests {
     use super::PositionsCache;
-    use crate::{orders::Order, positions::Position, caches::PositionsByIds};
+    use crate::{caches::PositionsByIds, orders::Order, positions::Position};
     use chrono::Utc;
     use std::{collections::HashMap, rc::Rc};
 
@@ -285,9 +295,12 @@ mod tests {
     fn positions_cache_not_empty() {
         let position = new_position();
         let cache = PositionsCache {
-            positions_by_wallets: HashMap::from([("s".to_string(), PositionsByIds::new(&Rc::new(position)))]),
-            positions_by_instruments: HashMap::new(),
-            positions_by_invest_assets: HashMap::new(),
+            positions_by_wallets: HashMap::from([(
+                "s".to_string(),
+                PositionsByIds::new(&Rc::new(position)),
+            )]),
+            positions_by_order_instruments: HashMap::new(),
+            positions_by_invest_intruments: HashMap::new(),
         };
 
         assert!(!cache.is_empty());
@@ -328,15 +341,15 @@ mod tests {
     }
 
     #[test]
-    fn positions_cache_get_by_asset() {
+    fn positions_cache_get_by_invest_instrument() {
         let position = new_position();
         let mut cache = PositionsCache::new();
 
         cache.add(position.clone());
         let order = position.get_order();
 
-        for asset in order.invest_assets.keys() {
-            let positions = cache.get_by_asset(asset);
+        for instrument in order.get_invest_instruments() {
+            let positions = cache.get_by_invest_instrument(&instrument);
 
             assert!(!positions.is_empty());
         }

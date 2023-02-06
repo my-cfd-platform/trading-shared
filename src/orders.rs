@@ -1,4 +1,4 @@
-use crate::positions::{ActivePosition, PendingPosition, Position};
+use crate::positions::{ActivePosition, PendingPosition, Position, BidAsk};
 use chrono::{DateTime, Duration, Utc};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use std::collections::HashMap;
@@ -90,6 +90,18 @@ pub enum AutoClosePositionUnit {
 }
 
 impl Order {
+
+    pub fn get_invest_instruments(&self) -> Vec<String> {
+        let mut instuments = Vec::with_capacity(self.invest_assets.len());
+
+        for asset in self.invest_assets.keys() {
+            let instrument = BidAsk::generate_id(asset, &self.base_asset);
+            instuments.push(instrument);
+        }
+
+        instuments
+    }
+
     pub fn get_type(&self) -> OrderType {
         if self.desire_price.is_some() {
             OrderType::Limit

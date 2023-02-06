@@ -125,7 +125,7 @@ impl Position {
     }
 }
 
-#[derive(Clone, IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, IntoPrimitive, TryFromPrimitive, PartialEq)]
 #[repr(i32)]
 pub enum PositionStatus {
     Pending = 0,
