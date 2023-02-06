@@ -1,5 +1,5 @@
 use crate::positions::{BidAsk, Position};
-use std::{collections::HashMap, mem, rc::Rc};
+use std::{collections::HashMap, mem, sync::Arc};
 
 pub struct BidAsksCache {
     bidasks_by_instruments: HashMap<String, BidAsk>,
@@ -66,13 +66,13 @@ impl BidAsksCache {
 }
 
 pub struct PositionsByIds {
-    positions_by_ids: HashMap<String, Rc<Position>>,
+    positions_by_ids: HashMap<String, Arc<Position>>,
 }
 
 impl PositionsByIds {
-    pub fn new(position: &Rc<Position>) -> Self {
+    pub fn new(position: &Arc<Position>) -> Self {
         Self {
-            positions_by_ids: HashMap::from([(position.get_id().to_owned(), Rc::clone(position))]),
+            positions_by_ids: HashMap::from([(position.get_id().to_owned(), Arc::clone(position))]),
         }
     }
 
@@ -80,16 +80,16 @@ impl PositionsByIds {
         self.positions_by_ids.is_empty()
     }
 
-    pub fn get_all(&self) -> Vec<Rc<Position>> {
+    pub fn get_all(&self) -> Vec<Arc<Position>> {
         self.positions_by_ids
             .values()
-            .map(|p| Rc::clone(&p))
+            .map(|p| Arc::clone(&p))
             .collect()
     }
 
-    pub fn add_or_replace(&mut self, position: &Rc<Position>) {
+    pub fn add_or_replace(&mut self, position: &Arc<Position>) {
         let position_id = position.get_id();
-        let mut position = Rc::clone(position);
+        let mut position = Arc::clone(position);
 
         if let Some(existing) = self.positions_by_ids.get_mut(position_id) {
             mem::swap(existing, &mut position);
@@ -99,7 +99,7 @@ impl PositionsByIds {
         }
     }
 
-    pub fn remove(&mut self, id: &str) -> Option<Rc<Position>> {
+    pub fn remove(&mut self, id: &str) -> Option<Arc<Position>> {
         let position = self.positions_by_ids.remove(id);
 
         if let Some(position) = position {
@@ -154,7 +154,7 @@ impl PositionsCache {
     }
 
     pub fn add(&mut self, position: Position) {
-        let position = Rc::new(position);
+        let position = Arc::new(position);
 
         // add by wallet id
         let wallet_positions = self
@@ -204,7 +204,7 @@ impl PositionsCache {
         }
     }
 
-    pub fn get_by_wallet_id(&self, wallet_id: &str) -> Vec<Rc<Position>> {
+    pub fn get_by_wallet_id(&self, wallet_id: &str) -> Vec<Arc<Position>> {
         let wallet_positions = self.positions_by_wallets.get(wallet_id);
 
         if let Some(wallet_positions) = wallet_positions {
@@ -214,8 +214,8 @@ impl PositionsCache {
         Vec::new()
     }
 
-    pub fn get_by_instrument(&self, instrument: &str) -> Vec<Rc<Position>> {
-        let mut all_positions: Vec<Rc<Position>> = Vec::new();
+    pub fn get_by_instrument(&self, instrument: &str) -> Vec<Arc<Position>> {
+        let mut all_positions: Vec<Arc<Position>> = Vec::new();
         let positions = self.positions_by_order_instruments.get(instrument);
 
         if let Some(positions) = positions {
@@ -229,7 +229,7 @@ impl PositionsCache {
         all_positions
     }
 
-    fn get_by_invest_instrument(&self, instrument: &str) -> Vec<Rc<Position>> {
+    fn get_by_invest_instrument(&self, instrument: &str) -> Vec<Arc<Position>> {
         let positions = self.positions_by_invest_intruments.get(instrument);
 
         if let Some(positions) = positions {
@@ -282,7 +282,7 @@ mod tests {
     use super::PositionsCache;
     use crate::{caches::PositionsByIds, orders::Order, positions::Position};
     use chrono::Utc;
-    use std::{collections::HashMap, rc::Rc};
+    use std::{collections::HashMap, sync::Arc};
 
     #[test]
     fn positions_cache_is_empty() {
@@ -297,7 +297,7 @@ mod tests {
         let cache = PositionsCache {
             positions_by_wallets: HashMap::from([(
                 "s".to_string(),
-                PositionsByIds::new(&Rc::new(position)),
+                PositionsByIds::new(&Arc::new(position)),
             )]),
             positions_by_order_instruments: HashMap::new(),
             positions_by_invest_intruments: HashMap::new(),

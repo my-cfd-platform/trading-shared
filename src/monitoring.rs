@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 use crate::{
     caches::PositionsCache,
     positions::{BidAsk, ClosedPosition, Position},
@@ -23,7 +23,7 @@ impl PositionsMonitor {
         self.positions_cache.add(position);
     }
 
-    pub fn get_positions(&mut self, wallet_id: &str) -> Vec<Rc<Position>> {
+    pub fn get_positions(&mut self, wallet_id: &str) -> Vec<Arc<Position>> {
         let positions = self.positions_cache.get_by_wallet_id(wallet_id);
 
         positions
