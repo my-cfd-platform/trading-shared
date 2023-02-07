@@ -29,8 +29,8 @@ impl PositionsMonitor {
         positions
     }
 
-    pub fn update(&mut self, bidask: &BidAsk) -> Vec<ClosedPosition> {
-        let mut closed_positions = Vec::new();
+    pub fn update(&mut self, bidask: &BidAsk) -> Vec<PositionMonitoringEvent> {
+        let mut events = Vec::new();
         let positions = self.positions_cache.get_by_instrument(&bidask.instrument);
 
         for position in positions {
@@ -40,7 +40,7 @@ impl PositionsMonitor {
 
             match position {
                 Position::Closed(closed_position) => {
-                    closed_positions.push(closed_position);
+                    events.push(PositionMonitoringEvent::PositionClosed(closed_position));
                 }
                 Position::Pending(mut pending_position) => {
                     pending_position.update(bidask);
@@ -51,7 +51,7 @@ impl PositionsMonitor {
                     active_position.update(bidask);
                     let position = active_position.try_close();
                     match position {
-                        Position::Closed(closed_position) => closed_positions.push(closed_position),
+                        Position::Closed(closed_position) => events.push(PositionMonitoringEvent::PositionClosed(closed_position)),
                         Position::Active(position) => {
                             self.positions_cache.add(Position::Active(position))
                         }
@@ -63,6 +63,10 @@ impl PositionsMonitor {
             }
         }
 
-        closed_positions
+        events
     }
+}
+
+pub enum PositionMonitoringEvent {
+    PositionClosed(ClosedPosition),
 }
