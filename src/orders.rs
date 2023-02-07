@@ -1,7 +1,7 @@
 use crate::{positions::{ActivePosition, PendingPosition, Position, BidAsk}, calculations::calculate_total_amount};
-use chrono::{DateTime, Duration, Utc};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
-use std::collections::HashMap;
+use rust_extensions::date_time::DateTimeAsMicroseconds;
+use std::{collections::HashMap, time::Duration};
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -13,7 +13,7 @@ pub struct Order {
     pub base_asset: String,
     pub invest_assets: HashMap<String, f64>,
     pub leverage: f64,
-    pub created_date: DateTime<Utc>,
+    pub created_date: DateTimeAsMicroseconds,
     pub side: OrderSide,
     pub take_profit: Option<TakeProfitConfig>,
     pub stop_loss: Option<StopLossConfig>,
@@ -148,7 +148,7 @@ impl Order {
     }
 
     fn into_active(self, price: f64, asset_prices: &HashMap<String, f64>) -> ActivePosition {
-        let now = Utc::now();
+        let now = DateTimeAsMicroseconds::now();
 
         ActivePosition {
             id: Position::generate_id(),
@@ -160,19 +160,21 @@ impl Order {
             order: self,
             current_price: price,
             current_asset_prices: asset_prices.to_owned(),
-            last_update_date: Utc::now(),
+            last_update_date: now,
         }
     }
 
     fn into_pending(self, price: f64, asset_prices: &HashMap<String, f64>) -> PendingPosition {
+        let now = DateTimeAsMicroseconds::now();
+
         PendingPosition {
             id: Position::generate_id(),
-            open_date: Utc::now(),
+            open_date: now,
             open_asset_prices: asset_prices.to_owned(),
             order: self,
             current_asset_prices: asset_prices.to_owned(),
             current_price: price,
-            last_update_date: Utc::now(),
+            last_update_date: now,
         }
     }
 }

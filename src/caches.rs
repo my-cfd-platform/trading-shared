@@ -281,7 +281,6 @@ impl PositionsCache {
 mod tests {
     use super::PositionsCache;
     use crate::{caches::PositionsByIds, orders::Order, positions::Position};
-    use chrono::Utc;
     use std::{collections::HashMap, sync::Arc};
 
     #[test]
@@ -375,7 +374,7 @@ mod tests {
             instrument: "ATOMUSDT".to_string(),
             trader_id: "test".to_string(),
             wallet_id: "test".to_string(),
-            created_date: Utc::now(),
+            created_date: rust_extensions::date_time::DateTimeAsMicroseconds::now(),
             desire_price: None,
             funding_fee_period: None,
             invest_assets: HashMap::from([invest_asset.clone()]),

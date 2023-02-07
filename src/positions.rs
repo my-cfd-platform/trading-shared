@@ -2,8 +2,8 @@ use crate::{
     calculations::{calculate_margin_percent, calculate_total_amount},
     orders::{Order, OrderSide, StopLossConfig, TakeProfitConfig},
 };
-use chrono::{DateTime, Utc};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
+use rust_extensions::date_time::DateTimeAsMicroseconds;
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -20,7 +20,7 @@ pub enum ClosePositionReason {
 #[derive(Clone)]
 pub struct BidAsk {
     pub instrument: String,
-    pub datetime: DateTime<Utc>,
+    pub datetime: DateTimeAsMicroseconds,
     pub bid: f64,
     pub ask: f64,
 }
@@ -94,7 +94,7 @@ impl Position {
         }
     }
 
-    pub fn get_open_date(&self) -> DateTime<Utc> {
+    pub fn get_open_date(&self) -> DateTimeAsMicroseconds {
         match self {
             Position::Active(position) => position.open_date,
             Position::Closed(position) => position.open_date,
@@ -138,18 +138,18 @@ pub enum PositionStatus {
 pub struct PendingPosition {
     pub id: String,
     pub order: Order,
-    pub open_date: DateTime<Utc>,
+    pub open_date: DateTimeAsMicroseconds,
     pub open_asset_prices: HashMap<String, f64>,
     pub current_price: f64,
     pub current_asset_prices: HashMap<String, f64>,
-    pub last_update_date: DateTime<Utc>,
+    pub last_update_date: DateTimeAsMicroseconds,
 }
 
 impl PendingPosition {
     pub fn update(&mut self, bidask: &BidAsk) {
         self.try_update_price(bidask);
         self.try_update_asset_price(bidask);
-        self.last_update_date = Utc::now();
+        self.last_update_date = DateTimeAsMicroseconds::now();
     }
 
     fn try_update_price(&mut self, bidask: &BidAsk) {
@@ -180,18 +180,20 @@ impl PendingPosition {
             if self.current_price >= desired_price && self.order.side == OrderSide::Sell
                 || self.current_price <= desired_price && self.order.side == OrderSide::Buy
             {
+                let now = DateTimeAsMicroseconds::now();
+
                 return Position::Active(
                     ActivePosition {
                         id: self.id,
                         open_date: self.open_date,
                         open_asset_prices: self.open_asset_prices,
                         activate_price: self.current_price,
-                        activate_date: Utc::now(),
+                        activate_date: now,
                         activate_asset_prices: self.current_asset_prices.to_owned(),
                         order: self.order,
                         current_price: self.current_price,
                         current_asset_prices: self.current_asset_prices.to_owned(),
-                        last_update_date: Utc::now(),
+                        last_update_date: now,
                     },
                 );
             }
@@ -226,7 +228,7 @@ impl PendingPosition {
             activate_date: None,
             activate_price: None,
             activate_asset_prices: HashMap::new(),
-            close_date: Utc::now(),
+            close_date: DateTimeAsMicroseconds::now(),
             close_price: self.current_price,
             close_reason: reason,
             close_asset_prices: self.current_asset_prices.to_owned(),
@@ -240,14 +242,14 @@ impl PendingPosition {
 pub struct ActivePosition {
     pub id: String,
     pub order: Order,
-    pub open_date: DateTime<Utc>,
+    pub open_date: DateTimeAsMicroseconds,
     pub open_asset_prices: HashMap<String, f64>,
     pub activate_price: f64,
-    pub activate_date: DateTime<Utc>,
+    pub activate_date: DateTimeAsMicroseconds,
     pub activate_asset_prices: HashMap<String, f64>,
     pub current_price: f64,
     pub current_asset_prices: HashMap<String, f64>,
-    pub last_update_date: DateTime<Utc>,
+    pub last_update_date: DateTimeAsMicroseconds,
 }
 
 impl ActivePosition {
@@ -298,7 +300,7 @@ impl ActivePosition {
             activate_date: Some(self.activate_date),
             activate_price: Some(self.activate_price),
             activate_asset_prices: self.activate_asset_prices,
-            close_date: Utc::now(),
+            close_date: DateTimeAsMicroseconds::now(),
             close_price: self.current_price,
             close_reason: reason,
             close_asset_prices: self.current_asset_prices.to_owned(),
@@ -396,13 +398,13 @@ impl ActivePosition {
 pub struct ClosedPosition {
     pub id: String,
     pub order: Order,
-    pub open_date: DateTime<Utc>,
+    pub open_date: DateTimeAsMicroseconds,
     pub open_asset_prices: HashMap<String, f64>,
     pub activate_price: Option<f64>,
-    pub activate_date: Option<DateTime<Utc>>,
+    pub activate_date: Option<DateTimeAsMicroseconds>,
     pub activate_asset_prices: HashMap<String, f64>,
     pub close_price: f64,
-    pub close_date: DateTime<Utc>,
+    pub close_date: DateTimeAsMicroseconds,
     pub close_reason: ClosePositionReason,
     pub close_asset_prices: HashMap<String, f64>,
     pub pnl: Option<f64>,
@@ -412,11 +414,8 @@ pub struct ClosedPosition {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-
-    use chrono::Utc;
-
+    use rust_extensions::date_time::DateTimeAsMicroseconds;
     use crate::{orders::Order, positions::Position};
-
     use super::ClosePositionReason;
 
     #[tokio::test]
@@ -427,7 +426,7 @@ mod tests {
             instrument: "ATOMUSDT".to_string(),
             trader_id: "test".to_string(),
             wallet_id: "test".to_string(),
-            created_date: Utc::now(),
+            created_date: DateTimeAsMicroseconds::now(),
             desire_price: None,
             funding_fee_period: None,
             invest_assets: HashMap::from([("BTC".to_string(), 100.0)]),
