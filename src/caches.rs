@@ -1,5 +1,9 @@
 use crate::positions::{BidAsk, Position};
-use std::{collections::{HashMap, HashSet}, mem, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    mem,
+    sync::Arc,
+};
 
 pub struct BidAsksCache {
     bidasks_by_instruments: HashMap<String, BidAsk>,
@@ -80,10 +84,12 @@ impl PositionsByIds {
         self.positions_by_ids.is_empty()
     }
 
-    pub fn get_all(&self) -> Vec<&Arc<Position>> {
-        self.positions_by_ids
-            .values()
-            .collect()
+    pub fn get_all(&self) -> &HashMap<String, Arc<Position>> {
+        &self.positions_by_ids
+    }
+
+    pub fn get_all_positions(&self) -> Vec<&Arc<Position>> {
+        self.positions_by_ids.values().collect()
     }
 
     pub fn add_or_replace(&mut self, position: &Arc<Position>) {
@@ -207,46 +213,44 @@ impl PositionsCache {
         let wallet_positions = self.positions_by_wallets.get(wallet_id);
 
         if let Some(wallet_positions) = wallet_positions {
-            return wallet_positions.get_all().into_iter().map(|p| Arc::clone(p)).collect();
+            return wallet_positions
+                .get_all_positions()
+                .into_iter()
+                .map(|p| Arc::clone(p))
+                .collect();
         }
 
         Vec::new()
     }
 
     pub fn get_by_instrument(&self, instrument: &str) -> Vec<Arc<Position>> {
-        let mut position_ids = HashSet::new();
+        let mut found_position_ids = HashSet::new();
         let mut all_positions: Vec<Arc<Position>> = Vec::new();
         let positions = self.positions_by_order_instruments.get(instrument);
 
         if let Some(positions) = positions {
             let positions = positions.get_all();
 
-            for position in positions {
+            for (id, position) in positions {
                 all_positions.push(Arc::clone(position));
-                position_ids.insert(position.get_id());
+                found_position_ids.insert(id);
             }
         }
 
-        let positions = self.get_by_invest_instrument(instrument);
+        let positions = self.positions_by_invest_intruments.get(instrument);
 
-        for position in positions {
-            if !position_ids.contains(position.get_id()) {
-                all_positions.push(Arc::clone(position));
-                position_ids.insert(position.get_id());
+        if let Some(positions) = positions {
+            let positions = positions.get_all();
+
+            for (id, position) in positions {
+                if !found_position_ids.contains(id) {
+                    all_positions.push(Arc::clone(position));
+                    found_position_ids.insert(id);
+                }
             }
         }
 
         all_positions
-    }
-
-    fn get_by_invest_instrument(&self, instrument: &str) -> Vec<&Arc<Position>> {
-        let positions = self.positions_by_invest_intruments.get(instrument);
-
-        if let Some(positions) = positions {
-            return positions.get_all();
-        }
-
-        Vec::new()
     }
 
     pub fn remove(&mut self, position_id: &str, wallet_id: &str) -> Option<Position> {
