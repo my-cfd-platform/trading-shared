@@ -1,4 +1,7 @@
-use crate::{positions::{ActivePosition, PendingPosition, Position, BidAsk}, calculations::calculate_total_amount};
+use crate::{
+    calculations::calculate_total_amount,
+    positions::{ActivePosition, BidAsk, PendingPosition, Position},
+};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 use std::{collections::HashMap, time::Duration};
@@ -90,7 +93,6 @@ pub enum AutoClosePositionUnit {
 }
 
 impl Order {
-
     pub fn get_invest_instruments(&self) -> Vec<String> {
         let mut instuments = Vec::with_capacity(self.invest_assets.len());
 
@@ -114,18 +116,23 @@ impl Order {
         Uuid::new_v4().to_string()
     }
 
-    pub fn validate_prices(&self, asset_prices: &HashMap<String, f64>) {
+    pub fn validate_prices(&self, asset_prices: &HashMap<String, f64>) -> Result<(), String> {
         for (asset, _amount) in self.invest_assets.iter() {
             let price = asset_prices.get(asset);
 
             if price.is_none() {
-                panic!("Can't open order. No price for {}", asset);
+                let message = format!("Can't open order: Not Found price for {}", asset);
+                return Err(message);
             }
         }
+
+        Ok(())
     }
 
     pub fn open(self, bidask: &BidAsk, asset_prices: &HashMap<String, f64>) -> Position {
-        self.validate_prices(asset_prices);
+        if let Err(_) = self.validate_prices(asset_prices) {
+            panic!("Invalid prices");
+        }
 
         let position = match self.get_type() {
             OrderType::Market => Position::Active(self.into_active(bidask, asset_prices)),
