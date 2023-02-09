@@ -114,13 +114,7 @@ impl Position {
         match self {
             Position::Pending(_position) => PositionStatus::Pending,
             Position::Active(_position) => PositionStatus::Active,
-            Position::Closed(position) => {
-                if position.activate_date.is_some() {
-                    PositionStatus::Filled
-                } else {
-                    PositionStatus::Canceled
-                }
-            }
+            Position::Closed(position) => position.get_status(),
         }
     }
 }
@@ -409,6 +403,16 @@ pub struct ClosedPosition {
     pub close_asset_prices: HashMap<String, f64>,
     pub pnl: Option<f64>,
     pub asset_pnls: HashMap<String, f64>,
+}
+
+impl ClosedPosition {
+    pub fn get_status(&self) -> PositionStatus {
+        if self.activate_date.is_some() {
+            PositionStatus::Filled
+        } else {
+            PositionStatus::Canceled
+        }
+    }    
 }
 
 #[cfg(test)]
