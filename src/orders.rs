@@ -121,7 +121,7 @@ impl Order {
             let price = asset_prices.get(asset);
 
             if price.is_none() {
-                let message = format!("Can't open order: Not Found price for {}", asset);
+                let message = format!("Not Found price for {}", asset);
                 return Err(message);
             }
         }
@@ -131,7 +131,7 @@ impl Order {
 
     pub fn open(self, bidask: &BidAsk, asset_prices: &HashMap<String, f64>) -> Position {
         if let Err(_) = self.validate_prices(asset_prices) {
-            panic!("Invalid prices");
+            panic!("Can't open order: invalid prices");
         }
 
         let position = match self.get_type() {
