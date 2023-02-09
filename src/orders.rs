@@ -124,13 +124,13 @@ impl Order {
         }
     }
 
-    pub fn open(self, price: f64, asset_prices: &HashMap<String, f64>) -> Position {
+    pub fn open(self, bidask: &BidAsk, asset_prices: &HashMap<String, f64>) -> Position {
         self.validate_prices(asset_prices);
 
         let position = match self.get_type() {
-            OrderType::Market => Position::Active(self.into_active(price, asset_prices)),
+            OrderType::Market => Position::Active(self.into_active(bidask, asset_prices)),
             OrderType::Limit => {
-                let pending_position = self.into_pending(price, asset_prices);
+                let pending_position = self.into_pending(bidask, asset_prices);
 
                 pending_position.try_activate()
             }
@@ -147,34 +147,34 @@ impl Order {
         calculate_total_amount(&self.invest_assets, asset_prices)
     }
 
-    fn into_active(self, price: f64, asset_prices: &HashMap<String, f64>) -> ActivePosition {
+    fn into_active(self, bidask: &BidAsk, asset_prices: &HashMap<String, f64>) -> ActivePosition {
         let now = DateTimeAsMicroseconds::now();
 
         ActivePosition {
             id: Position::generate_id(),
             open_date: now,
             open_asset_prices: asset_prices.to_owned(),
-            activate_price: price,
+            activate_price: bidask.get_open_price(&self.side),
             activate_date: now,
             activate_asset_prices: asset_prices.to_owned(),
-            order: self,
-            current_price: price,
+            current_price: bidask.get_close_price(&self.side),
             current_asset_prices: asset_prices.to_owned(),
             last_update_date: now,
+            order: self,
         }
     }
 
-    fn into_pending(self, price: f64, asset_prices: &HashMap<String, f64>) -> PendingPosition {
+    fn into_pending(self, bidask: &BidAsk, asset_prices: &HashMap<String, f64>) -> PendingPosition {
         let now = DateTimeAsMicroseconds::now();
 
         PendingPosition {
             id: Position::generate_id(),
             open_date: now,
             open_asset_prices: asset_prices.to_owned(),
-            order: self,
             current_asset_prices: asset_prices.to_owned(),
-            current_price: price,
+            current_price: bidask.get_open_price(&self.side),
             last_update_date: now,
+            order: self,
         }
     }
 }

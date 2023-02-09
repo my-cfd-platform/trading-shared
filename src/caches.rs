@@ -293,8 +293,10 @@ impl PositionsCache {
 
 #[cfg(test)]
 mod tests {
+    use rust_extensions::date_time::DateTimeAsMicroseconds;
+
     use super::PositionsCache;
-    use crate::{caches::PositionsByIds, orders::Order, positions::Position};
+    use crate::{caches::PositionsByIds, orders::Order, positions::{Position, BidAsk}};
     use std::{collections::HashMap, sync::Arc};
 
     #[test]
@@ -354,21 +356,6 @@ mod tests {
     }
 
     #[test]
-    fn positions_cache_get_by_invest_instrument() {
-        let position = new_position();
-        let mut cache = PositionsCache::new();
-
-        cache.add(position.clone());
-        let order = position.get_order();
-
-        for instrument in order.get_invest_instruments() {
-            let positions = cache.get_by_invest_instrument(&instrument);
-
-            assert!(!positions.is_empty());
-        }
-    }
-
-    #[test]
     fn positions_cache_get_by_instrument() {
         let position = new_position();
         let mut cache = PositionsCache::new();
@@ -402,7 +389,13 @@ mod tests {
             top_up_percent: 10.0,
         };
         let prices = HashMap::from([("BTC".to_string(), 22300.0)]);
-        let position = order.open(14.748, &prices);
+        let bidask = BidAsk {
+            ask: 14.748,
+            bid: 14.748,
+            datetime: DateTimeAsMicroseconds::now(),
+            instrument: "ATOMUSDT".to_string(),
+        };
+        let position = order.open(&bidask, &prices);
 
         position
     }

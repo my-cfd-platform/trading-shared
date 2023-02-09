@@ -154,7 +154,7 @@ impl PendingPosition {
 
     fn try_update_price(&mut self, bidask: &BidAsk) {
         if self.order.instrument == bidask.instrument {
-            self.current_price = bidask.get_close_price(&self.order.side)
+            self.current_price = bidask.get_open_price(&self.order.side)
         }
     }
 
@@ -415,7 +415,7 @@ pub struct ClosedPosition {
 mod tests {
     use std::collections::HashMap;
     use rust_extensions::date_time::DateTimeAsMicroseconds;
-    use crate::{orders::Order, positions::Position};
+    use crate::{orders::Order, positions::{Position, BidAsk}};
     use super::ClosePositionReason;
 
     #[tokio::test]
@@ -440,7 +440,13 @@ mod tests {
             top_up_percent: 10.0,
         };
         let prices = HashMap::from([("BTC".to_string(), 22300.0)]);
-        let position = order.open(14.748, &prices);
+        let bidask = BidAsk {
+            ask: 14.748,
+            bid: 14.748,
+            datetime: DateTimeAsMicroseconds::now(),
+            instrument: "ATOMUSDT".to_string(),
+        };
+        let position = order.open(&bidask, &prices);
         let mut position = match position {
             Position::Active(position) => position,
             _ => {
