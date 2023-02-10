@@ -7,7 +7,7 @@ use rust_extensions::date_time::DateTimeAsMicroseconds;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-#[derive(Clone, IntoPrimitive, TryFromPrimitive)]
+#[derive(Debug, Clone, IntoPrimitive, TryFromPrimitive)]
 #[repr(i32)]
 pub enum ClosePositionReason {
     ClientCommand = 0,
@@ -176,20 +176,18 @@ impl PendingPosition {
             {
                 let now = DateTimeAsMicroseconds::now();
 
-                return Position::Active(
-                    ActivePosition {
-                        id: self.id,
-                        open_date: self.open_date,
-                        open_asset_prices: self.open_asset_prices,
-                        activate_price: self.current_price,
-                        activate_date: now,
-                        activate_asset_prices: self.current_asset_prices.to_owned(),
-                        order: self.order,
-                        current_price: self.current_price,
-                        current_asset_prices: self.current_asset_prices.to_owned(),
-                        last_update_date: now,
-                    },
-                );
+                return Position::Active(ActivePosition {
+                    id: self.id,
+                    open_date: self.open_date,
+                    open_asset_prices: self.open_asset_prices,
+                    activate_price: self.current_price,
+                    activate_date: now,
+                    activate_asset_prices: self.current_asset_prices.to_owned(),
+                    order: self.order,
+                    current_price: self.current_price,
+                    current_asset_prices: self.current_asset_prices.to_owned(),
+                    last_update_date: now,
+                });
             }
 
             return Position::Pending(self);
@@ -210,10 +208,7 @@ impl PendingPosition {
         self.order.desire_price = Some(value);
     }
 
-    pub fn close(
-        self,
-        reason: ClosePositionReason,
-    ) -> ClosedPosition {
+    pub fn close(self, reason: ClosePositionReason) -> ClosedPosition {
         return ClosedPosition {
             pnl: None,
             asset_pnls: HashMap::new(),
@@ -232,7 +227,7 @@ impl PendingPosition {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct ActivePosition {
     pub id: String,
     pub order: Order,
@@ -287,7 +282,10 @@ impl ActivePosition {
         let asset_pnls = self.calculate_asset_pnls();
 
         return ClosedPosition {
-            pnl: Some(calculate_total_amount(&asset_pnls, &self.current_asset_prices)),
+            pnl: Some(calculate_total_amount(
+                &asset_pnls,
+                &self.current_asset_prices,
+            )),
             asset_pnls,
             open_date: self.open_date,
             open_asset_prices: self.open_asset_prices,
@@ -388,7 +386,7 @@ impl ActivePosition {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct ClosedPosition {
     pub id: String,
     pub order: Order,
@@ -412,15 +410,18 @@ impl ClosedPosition {
         } else {
             PositionStatus::Canceled
         }
-    }    
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
+    use super::{ActivePosition, ClosePositionReason};
+    use crate::{
+        orders::{Order, OrderSide, TakeProfitConfig},
+        positions::{BidAsk, Position},
+    };
     use rust_extensions::date_time::DateTimeAsMicroseconds;
-    use crate::{orders::Order, positions::{Position, BidAsk}};
-    use super::ClosePositionReason;
+    use std::collections::HashMap;
 
     #[tokio::test]
     async fn close_active_position() {
@@ -467,5 +468,80 @@ mod tests {
         assert_ne!(pnl, asset_pnl);
         assert_eq!(302.41388662883173, pnl);
         assert_eq!(0.01356116083537362, asset_pnl);
+    }
+
+    #[tokio::test]
+    async fn close_by_tp() {
+        let instrument = "ATOMUSDT".to_string();
+        let prices = HashMap::from([("USDT".to_string(), 1.0)]);
+        let invest_assets = HashMap::from([("USDT".to_string(), 100342.0)]);
+        let order = new_order(instrument, invest_assets, 1.0, OrderSide::Sell);
+        let bidask = BidAsk {
+            ask: 13.815,
+            bid: 13.815,
+            datetime: DateTimeAsMicroseconds::now(),
+            instrument: "ATOMUSDT".to_string(),
+        };
+        let mut position = new_active_position(order, &bidask, &prices);
+        let take_profit = TakeProfitConfig {
+            unit: crate::orders::AutoClosePositionUnit::PriceRate,
+            value: 13.817,
+        };
+        position.set_take_profit(Some(take_profit));
+        position.current_price = 13.817;
+
+        let position = position.try_close();
+        let _position = match position {
+            Position::Closed(position) => position,
+            _ => panic!("must be closed"),
+        };
+    }
+
+    fn new_order(
+        instrument: String,
+        invest_assets: HashMap<String, f64>,
+        leverage: f64,
+        side: OrderSide,
+    ) -> Order {
+        Order {
+            base_asset: "USDT".to_string(),
+            id: "test".to_string(),
+            instrument,
+            trader_id: "test".to_string(),
+            wallet_id: "test".to_string(),
+            created_date: rust_extensions::date_time::DateTimeAsMicroseconds::now(),
+            desire_price: None,
+            funding_fee_period: None,
+            invest_assets,
+            leverage,
+            side,
+            take_profit: None,
+            stop_loss: None,
+            stop_out_percent: 90.0,
+            margin_call_percent: 70.0,
+            top_up_enabled: false,
+            top_up_percent: 10.0,
+        }
+    }
+
+    fn new_active_position(
+        order: Order,
+        bidask: &BidAsk,
+        asset_prices: &HashMap<String, f64>,
+    ) -> ActivePosition {
+        let now = DateTimeAsMicroseconds::now();
+
+        ActivePosition {
+            id: Position::generate_id(),
+            open_date: now,
+            open_asset_prices: asset_prices.to_owned(),
+            activate_price: bidask.get_open_price(&order.side),
+            activate_date: now,
+            activate_asset_prices: asset_prices.to_owned(),
+            current_price: bidask.get_close_price(&order.side),
+            current_asset_prices: asset_prices.to_owned(),
+            last_update_date: now,
+            order,
+        }
     }
 }

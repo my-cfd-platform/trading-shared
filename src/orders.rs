@@ -7,7 +7,7 @@ use rust_extensions::date_time::DateTimeAsMicroseconds;
 use std::{collections::HashMap, time::Duration};
 use uuid::Uuid;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Order {
     pub id: String,
     pub trader_id: String,
@@ -35,13 +35,13 @@ pub enum OrderType {
     Limit = 1,
 }
 
-#[derive(PartialEq, Clone, IntoPrimitive, TryFromPrimitive)]
+#[derive(Debug, PartialEq, Clone, IntoPrimitive, TryFromPrimitive)]
 #[repr(i32)]
 pub enum OrderSide {
     Buy = 0,
     Sell = 1,
 }
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct TakeProfitConfig {
     pub value: f64,
     pub unit: AutoClosePositionUnit,
@@ -63,7 +63,7 @@ impl TakeProfitConfig {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct StopLossConfig {
     pub value: f64,
     pub unit: AutoClosePositionUnit,
@@ -85,7 +85,7 @@ impl StopLossConfig {
     }
 }
 
-#[derive(Clone, IntoPrimitive, TryFromPrimitive)]
+#[derive(Debug, Clone, IntoPrimitive, TryFromPrimitive)]
 #[repr(i32)]
 pub enum AutoClosePositionUnit {
     AssetAmount,
