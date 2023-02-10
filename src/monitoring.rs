@@ -85,3 +85,7 @@ pub enum PositionMonitoringEvent {
     PositionClosed(ClosedPosition),
     PositionActivated(ActivePosition),
 }
+
+#[cfg(test)]
+mod tests {
+}

@@ -324,8 +324,12 @@ mod tests {
         let mut cache = PositionsCache::new();
 
         cache.add(position.clone());
-        cache.remove(position.get_id(), &order.wallet_id);
+        assert!(!cache.is_empty());
 
+        cache.remove(position.get_id(), &order.wallet_id);
+        let positions = cache.get_by_wallet_id(&order.wallet_id);
+
+        assert!(positions.len() == 0);
         assert!(cache.is_empty());
     }
 
