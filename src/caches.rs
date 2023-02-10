@@ -117,16 +117,14 @@ impl PositionsByIds {
 
 pub struct PositionsCache {
     positions_by_wallets: HashMap<String, PositionsByIds>,
-    positions_by_order_instruments: HashMap<String, PositionsByIds>,
-    positions_by_invest_intruments: HashMap<String, PositionsByIds>,
+    positions_by_instruments: HashMap<String, PositionsByIds>,
 }
 
 impl PositionsCache {
     pub fn new() -> PositionsCache {
         PositionsCache {
             positions_by_wallets: HashMap::new(),
-            positions_by_order_instruments: HashMap::new(),
-            positions_by_invest_intruments: HashMap::new(),
+            positions_by_instruments: HashMap::new(),
         }
     }
 
@@ -139,16 +137,8 @@ impl PositionsCache {
             }
         }
 
-        if !self.positions_by_order_instruments.is_empty() {
-            for item in self.positions_by_order_instruments.values() {
-                if !item.is_empty() {
-                    return false;
-                }
-            }
-        }
-
-        if !self.positions_by_invest_intruments.is_empty() {
-            for item in self.positions_by_invest_intruments.values() {
+        if !self.positions_by_instruments.is_empty() {
+            for item in self.positions_by_instruments.values() {
                 if !item.is_empty() {
                     return false;
                 }
@@ -179,7 +169,7 @@ impl PositionsCache {
 
         // add by instrument
         let instrument_positions = self
-            .positions_by_order_instruments
+            .positions_by_instruments
             .get_mut(&position.get_order().instrument);
 
         match instrument_positions {
@@ -188,21 +178,25 @@ impl PositionsCache {
             }
             None => {
                 let instrument = position.get_order().instrument.clone();
-                self.positions_by_order_instruments
+                self.positions_by_instruments
                     .insert(instrument, PositionsByIds::new(&position));
             }
         }
 
         // add by invest instruments
         for instrument in position.get_order().get_invest_instruments() {
-            let asset_positions = self.positions_by_invest_intruments.get_mut(&instrument);
+            if instrument == position.get_order().instrument {
+                continue;
+            }
+            
+            let asset_positions = self.positions_by_instruments.get_mut(&instrument);
 
             match asset_positions {
                 Some(positions) => {
                     positions.add_or_replace(&position);
                 }
                 None => {
-                    self.positions_by_invest_intruments
+                    self.positions_by_instruments
                         .insert(instrument, PositionsByIds::new(&position));
                 }
             }
@@ -226,18 +220,7 @@ impl PositionsCache {
     pub fn get_by_instrument(&self, instrument: &str) -> Vec<Arc<Position>> {
         let mut found_position_ids = HashSet::new();
         let mut all_positions: Vec<Arc<Position>> = Vec::new();
-        let positions = self.positions_by_order_instruments.get(instrument);
-
-        if let Some(positions) = positions {
-            let positions = positions.get_all();
-
-            for (id, position) in positions {
-                all_positions.push(Arc::clone(position));
-                found_position_ids.insert(id);
-            }
-        }
-
-        let positions = self.positions_by_invest_intruments.get(instrument);
+        let positions = self.positions_by_instruments.get(instrument);
 
         if let Some(positions) = positions {
             let positions = positions.get_all();
@@ -263,7 +246,7 @@ impl PositionsCache {
                 if let Some(position) = position {
                     let order = position.get_order();
                     let instrument_positions = self
-                        .positions_by_order_instruments
+                        .positions_by_instruments
                         .get_mut(&order.instrument);
 
                     if let Some(instrument_positions) = instrument_positions {
@@ -272,7 +255,7 @@ impl PositionsCache {
 
                     for instrument in order.get_invest_instruments() {
                         let asset_positions =
-                            self.positions_by_invest_intruments.get_mut(&instrument);
+                            self.positions_by_instruments.get_mut(&instrument);
 
                         if let Some(asset_positions) = asset_positions {
                             asset_positions.remove(position_id);
@@ -296,7 +279,11 @@ mod tests {
     use rust_extensions::date_time::DateTimeAsMicroseconds;
 
     use super::PositionsCache;
-    use crate::{caches::PositionsByIds, orders::Order, positions::{Position, BidAsk}};
+    use crate::{
+        caches::PositionsByIds,
+        orders::Order,
+        positions::{BidAsk, Position},
+    };
     use std::{collections::HashMap, sync::Arc};
 
     #[test]
@@ -314,8 +301,7 @@ mod tests {
                 "s".to_string(),
                 PositionsByIds::new(&Arc::new(position)),
             )]),
-            positions_by_order_instruments: HashMap::new(),
-            positions_by_invest_intruments: HashMap::new(),
+            positions_by_instruments: HashMap::new(),
         };
 
         assert!(!cache.is_empty());
