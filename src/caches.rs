@@ -183,9 +183,11 @@ impl PositionsCache {
             }
         }
 
+        let order = position.get_order();
+
         // add by invest instruments
-        for instrument in position.get_order().get_invest_instruments() {
-            if instrument == position.get_order().instrument {
+        for instrument in order.get_invest_instruments() {
+            if instrument == order.instrument {
                 continue;
             }
             
