@@ -88,6 +88,10 @@ impl PositionsByIds {
         &self.positions_by_ids
     }
 
+    pub fn take_all(self) -> HashMap<String, Arc<Position>> {
+        self.positions_by_ids
+    }
+
     pub fn get_all_positions(&self) -> Vec<&Arc<Position>> {
         self.positions_by_ids.values().collect()
     }
@@ -238,6 +242,13 @@ impl PositionsCache {
         all_positions
     }
 
+    /// Partially removes positions cache by instrument.
+    /// Requires additionally to remove positions by wallet id 
+    pub fn remove_part_by_instrument(&mut self, instrument: &str) -> Option<PositionsByIds> {
+        self.positions_by_instruments.remove(instrument)
+    }
+
+    /// Fully removes position
     pub fn remove(&mut self, position_id: &str, wallet_id: &str) -> Option<Position> {
         let wallet_positions = self.positions_by_wallets.get_mut(wallet_id);
 

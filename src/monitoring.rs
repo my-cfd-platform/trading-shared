@@ -29,48 +29,53 @@ impl PositionsMonitor {
 
     pub fn update(&mut self, bidask: &BidAsk) -> Vec<PositionMonitoringEvent> {
         let mut events = Vec::new();
-        let positions = self.positions_cache.get_by_instrument(&bidask.instrument);
+        let positions = self
+            .positions_cache
+            .remove_part_by_instrument(&bidask.instrument);
 
-        for position in positions {
-            let position = self
-                .positions_cache
-                .remove(&position.get_id(), &position.get_order().wallet_id);
-            let position = position.unwrap();
+        if let Some(positions) = positions {
+            for (id, position) in positions.take_all() {
+                let position = self
+                    .positions_cache
+                    .remove(&id, &position.get_order().wallet_id);
+                let position = position.expect("Must exists");
 
-            match position {
-                Position::Closed(closed_position) => {
-                    events.push(PositionMonitoringEvent::PositionClosed(closed_position));
-                }
-                Position::Pending(mut pending_position) => {
-                    pending_position.update(bidask);
-                    let position = pending_position.try_activate();
+                match position {
+                    Position::Closed(closed_position) => {
+                        events.push(PositionMonitoringEvent::PositionClosed(closed_position));
+                    }
+                    Position::Pending(mut pending_position) => {
+                        pending_position.update(bidask);
+                        let position = pending_position.try_activate();
 
-                    match position {
-                        Position::Closed(_) => {
-                            panic!("Pending position can't become Closed after try_activate")
-                        }
-                        Position::Active(position) => {
-                            events.push(PositionMonitoringEvent::PositionActivated(position.clone()));
-                            self.positions_cache.add(Position::Active(position))
-                        }
-                        Position::Pending(position) => {
-                            self.positions_cache.add(Position::Pending(position))
+                        match position {
+                            Position::Closed(_) => {
+                                panic!("Pending position can't become Closed after try_activate")
+                            }
+                            Position::Active(position) => {
+                                events.push(PositionMonitoringEvent::PositionActivated(
+                                    position.clone(),
+                                ));
+                                self.positions_cache.add(Position::Active(position))
+                            }
+                            Position::Pending(position) => {
+                                self.positions_cache.add(Position::Pending(position))
+                            }
                         }
                     }
-                }
-                Position::Active(mut active_position) => {
-                    active_position.update(bidask);
-                    let position = active_position.try_close();
+                    Position::Active(mut active_position) => {
+                        active_position.update(bidask);
+                        let position = active_position.try_close();
 
-                    match position {
-                        Position::Closed(closed_position) => {
-                            events.push(PositionMonitoringEvent::PositionClosed(closed_position))
-                        }
-                        Position::Active(position) => {
-                            self.positions_cache.add(Position::Active(position))
-                        }
-                        Position::Pending(_) => {
-                            panic!("Active position can't become Pending")
+                        match position {
+                            Position::Closed(closed_position) => events
+                                .push(PositionMonitoringEvent::PositionClosed(closed_position)),
+                            Position::Active(position) => {
+                                self.positions_cache.add(Position::Active(position))
+                            }
+                            Position::Pending(_) => {
+                                panic!("Active position can't become Pending")
+                            }
                         }
                     }
                 }
@@ -87,5 +92,4 @@ pub enum PositionMonitoringEvent {
 }
 
 #[cfg(test)]
-mod tests {
-}
+mod tests {}
