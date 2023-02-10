@@ -134,6 +134,10 @@ impl Order {
             panic!("Can't open order: invalid prices");
         }
 
+        if self.leverage <= 0.0 {
+            panic!("Can't open order: leverage can't be less or equals zero");
+        }
+
         let position = match self.get_type() {
             OrderType::Market => Position::Active(self.into_active(bidask, asset_prices)),
             OrderType::Limit => {
