@@ -1,10 +1,6 @@
+use std::mem;
 use crate::positions::{BidAsk, Position};
-use std::{
-    collections::{HashMap, HashSet},
-    mem,
-    sync::Arc,
-};
-use ahash::AHashMap;
+use ahash::{AHashMap, AHashSet};
 
 pub struct BidAsksCache {
     bidasks_by_instruments: AHashMap<String, BidAsk>,
@@ -35,9 +31,7 @@ impl BidAsksCache {
     }
 
     pub fn get(&self, instrument: &str) -> Option<&BidAsk> {
-        let bidask = self.bidasks_by_instruments.get(instrument);
-
-        return bidask;
+        self.bidasks_by_instruments.get(instrument)
     }
 
     pub fn find(&self, base_asset: &str, assets: &[&String]) -> AHashMap<String, BidAsk> {
@@ -58,7 +52,7 @@ impl BidAsksCache {
     pub fn find_prices(&self, to_asset: &str, from_assets: &[&String]) -> AHashMap<String, f64> {
         let mut prices = AHashMap::with_capacity(from_assets.len());
 
-        for asset in from_assets.into_iter() {
+        for asset in from_assets.iter() {
             if *asset == to_asset {
                 prices.insert((*asset).to_owned(), 1.0);
             }
@@ -76,14 +70,16 @@ impl BidAsksCache {
     }
 }
 
-pub struct PositionsByIds {
-    positions_by_ids: HashMap<String, Arc<Position>>,
+pub struct PositionsCache {
+    positions_by_ids: AHashMap<String, Position>,
+    ids_by_wallets: AHashMap<String, AHashSet<String>>,
 }
 
-impl PositionsByIds {
-    pub fn new(position: &Arc<Position>) -> Self {
-        Self {
-            positions_by_ids: HashMap::from([(position.get_id().to_owned(), Arc::clone(position))]),
+impl PositionsCache {
+    pub fn with_capacity(capacity: usize) -> PositionsCache {
+        PositionsCache {
+            ids_by_wallets: AHashMap::with_capacity(capacity),
+            positions_by_ids: AHashMap::with_capacity(capacity),
         }
     }
 
@@ -91,198 +87,48 @@ impl PositionsByIds {
         self.positions_by_ids.is_empty()
     }
 
-    pub fn get_all(&self) -> &HashMap<String, Arc<Position>> {
-        &self.positions_by_ids
-    }
-
-    pub fn take_all(self) -> HashMap<String, Arc<Position>> {
-        self.positions_by_ids
-    }
-
-    pub fn get_all_positions(&self) -> Vec<&Arc<Position>> {
-        self.positions_by_ids.values().collect()
-    }
-
-    pub fn add_or_replace(&mut self, position: &Arc<Position>) {
-        let position_id = position.get_id();
-        let mut position = Arc::clone(position);
-
-        if let Some(existing) = self.positions_by_ids.get_mut(position_id) {
-            mem::swap(existing, &mut position);
-        } else {
-            self.positions_by_ids
-                .insert(position_id.to_owned(), position);
-        }
-    }
-
-    pub fn remove(&mut self, id: &str) -> Option<Arc<Position>> {
-        self.positions_by_ids.remove(id)
-    }
-}
-
-pub struct PositionsCache {
-    positions_by_wallets: HashMap<String, PositionsByIds>,
-    positions_by_instruments: HashMap<String, PositionsByIds>,
-}
-
-impl PositionsCache {
-    pub fn new() -> PositionsCache {
-        PositionsCache {
-            positions_by_wallets: HashMap::new(),
-            positions_by_instruments: HashMap::new(),
-        }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        if !self.positions_by_wallets.is_empty() {
-            for item in self.positions_by_wallets.values() {
-                if !item.is_empty() {
-                    return false;
-                }
-            }
-        }
-
-        if !self.positions_by_instruments.is_empty() {
-            for item in self.positions_by_instruments.values() {
-                if !item.is_empty() {
-                    return false;
-                }
-            }
-        }
-
-        true
-    }
-
     pub fn add(&mut self, position: Position) {
-        let position = Arc::new(position);
+        let id = position.get_id().to_owned();
+        let wallet_id = position.get_order().wallet_id.clone();
 
-        // add by wallet id
-        let wallet_positions = self
-            .positions_by_wallets
-            .get_mut(&position.get_order().wallet_id);
+        self.positions_by_ids.insert(id.clone(), position);
 
-        match wallet_positions {
-            Some(positions) => {
-                positions.add_or_replace(&position);
-            }
-            None => {
-                let wallet_id = position.get_order().wallet_id.clone();
-                self.positions_by_wallets
-                    .insert(wallet_id, PositionsByIds::new(&position));
-            }
-        }
-
-        // add by instrument
-        let instrument_positions = self
-            .positions_by_instruments
-            .get_mut(&position.get_order().instrument);
-
-        match instrument_positions {
-            Some(positions) => {
-                positions.add_or_replace(&position);
-            }
-            None => {
-                let instrument = position.get_order().instrument.clone();
-                self.positions_by_instruments
-                    .insert(instrument, PositionsByIds::new(&position));
-            }
-        }
-
-        let order = position.get_order();
-
-        // add by invest instruments
-        for instrument in order.get_invest_instruments() {
-            if instrument == order.instrument {
-                continue;
-            }
-            
-            let asset_positions = self.positions_by_instruments.get_mut(&instrument);
-
-            match asset_positions {
-                Some(positions) => {
-                    positions.add_or_replace(&position);
-                }
-                None => {
-                    self.positions_by_instruments
-                        .insert(instrument, PositionsByIds::new(&position));
-                }
-            }
+        if let Some(ids) = self.ids_by_wallets.get_mut(&wallet_id) {
+            ids.insert(id);
+        } else {
+            self.ids_by_wallets
+                .insert(wallet_id, AHashSet::from([id]));
         }
     }
 
-    pub fn get_by_wallet_id(&self, wallet_id: &str) -> Vec<Arc<Position>> {
-        let wallet_positions = self.positions_by_wallets.get(wallet_id);
+    pub fn get_by_wallet_id(&self, wallet_id: &str) -> Vec<&Position> {
+        let ids = self.ids_by_wallets.get(wallet_id);
 
-        if let Some(wallet_positions) = wallet_positions {
-            return wallet_positions
-                .get_all_positions()
-                .into_iter()
-                .map(Arc::clone)
-                .collect();
+        if let Some(ids) = ids {
+            let mut positions = Vec::with_capacity(ids.len());
+
+            for id in ids {
+                positions.push(self.positions_by_ids.get(id).expect("Error in add method"));
+            }
+
+            return positions;
         }
 
-        Vec::new()
+        Vec::with_capacity(0)
     }
 
-    pub fn get_by_instrument(&self, instrument: &str) -> Vec<Arc<Position>> {
-        let mut found_position_ids = HashSet::new();
-        let mut all_positions: Vec<Arc<Position>> = Vec::new();
-        let positions = self.positions_by_instruments.get(instrument);
+    pub fn get_mut(&mut self, id: &str) -> Option<&mut Position> {
+        self.positions_by_ids.get_mut(id)
+    }
 
-        if let Some(positions) = positions {
-            let positions = positions.get_all();
+    pub fn remove(&mut self, position_id: &str) -> Option<Position> {
+        let position = self.positions_by_ids.remove(position_id);
 
-            for (id, position) in positions {
-                if !found_position_ids.contains(id) {
-                    all_positions.push(Arc::clone(position));
-                    found_position_ids.insert(id);
-                }
+        if let Some(position) = position.as_ref() {
+            if let Some(ids) = self.ids_by_wallets.get_mut(&position.get_order().wallet_id) {
+                ids.remove(position_id);
             }
         }
-
-        all_positions
-    }
-
-    /// Partially removes positions cache by instrument.
-    /// Requires additionally to remove positions by wallet id 
-    pub fn remove_part_by_instrument(&mut self, instrument: &str) -> Option<PositionsByIds> {
-        self.positions_by_instruments.remove(instrument)
-    }
-
-    /// Fully removes position
-    pub fn remove(&mut self, position_id: &str, wallet_id: &str) -> Option<Position> {
-        let wallet_positions = self.positions_by_wallets.get_mut(wallet_id);
-
-        let position = match wallet_positions {
-            Some(positions) => {
-                let position = positions.remove(position_id);
-
-                if let Some(position) = position {
-                    let order = position.get_order();
-                    let instrument_positions = self
-                        .positions_by_instruments
-                        .get_mut(&order.instrument);
-
-                    if let Some(instrument_positions) = instrument_positions {
-                        instrument_positions.remove(position_id);
-                    }
-
-                    for instrument in order.get_invest_instruments() {
-                        let asset_positions =
-                            self.positions_by_instruments.get_mut(&instrument);
-
-                        if let Some(asset_positions) = asset_positions {
-                            asset_positions.remove(position_id);
-                        }
-                    }
-
-                    Some(position.as_ref().to_owned())
-                } else {
-                    None
-                }
-            }
-            None => None,
-        };
 
         position
     }
@@ -294,39 +140,24 @@ mod tests {
 
     use super::PositionsCache;
     use crate::{
-        caches::PositionsByIds,
         orders::Order,
         positions::{BidAsk, Position},
     };
-    use std::{collections::HashMap, sync::Arc};
+    use std::collections::HashMap;
 
     #[test]
     fn positions_cache_is_empty() {
-        let cache = PositionsCache::new();
+        let cache = PositionsCache::with_capacity(10);
 
         assert!(cache.is_empty());
     }
 
     #[test]
-    fn positions_cache_not_empty() {
-        let position = new_position();
-        let cache = PositionsCache {
-            positions_by_wallets: HashMap::from([(
-                "s".to_string(),
-                PositionsByIds::new(&Arc::new(position)),
-            )]),
-            positions_by_instruments: HashMap::new(),
-        };
-
-        assert!(!cache.is_empty());
-    }
-
-    #[test]
     fn positions_cache_add() {
         let position = new_position();
-        let mut cache = PositionsCache::new();
+        let mut cache = PositionsCache::with_capacity(10);
 
-        cache.add(position.clone());
+        cache.add(position);
 
         assert!(!cache.is_empty());
     }
@@ -335,38 +166,26 @@ mod tests {
     fn positions_cache_remove() {
         let position = new_position();
         let order = position.get_order();
-        let mut cache = PositionsCache::new();
+        let mut cache = PositionsCache::with_capacity(10);
 
         cache.add(position.clone());
         assert!(!cache.is_empty());
 
-        cache.remove(position.get_id(), &order.wallet_id);
+        cache.remove(position.get_id());
         let positions = cache.get_by_wallet_id(&order.wallet_id);
 
-        assert!(positions.len() == 0);
+        assert_eq!(positions.len(), 0);
         assert!(cache.is_empty());
     }
 
     #[test]
     fn positions_cache_get_by_wallet() {
         let position = new_position();
-        let mut cache = PositionsCache::new();
+        let mut cache = PositionsCache::with_capacity(10);
 
         cache.add(position.clone());
         let order = position.get_order();
         let positions = cache.get_by_wallet_id(&order.wallet_id);
-
-        assert!(!positions.is_empty());
-    }
-
-    #[test]
-    fn positions_cache_get_by_instrument() {
-        let position = new_position();
-        let mut cache = PositionsCache::new();
-
-        cache.add(position.clone());
-        let order = position.get_order();
-        let positions = cache.get_by_instrument(&order.instrument);
 
         assert!(!positions.is_empty());
     }
@@ -379,10 +198,10 @@ mod tests {
             instrument: "ATOMUSDT".to_string(),
             trader_id: "test".to_string(),
             wallet_id: "test".to_string(),
-            created_date: rust_extensions::date_time::DateTimeAsMicroseconds::now(),
+            created_date: DateTimeAsMicroseconds::now(),
             desire_price: None,
             funding_fee_period: None,
-            invest_assets: HashMap::from([invest_asset.clone()]),
+            invest_assets: HashMap::from([invest_asset]),
             leverage: 1.0,
             side: crate::orders::OrderSide::Buy,
             take_profit: None,
@@ -399,8 +218,7 @@ mod tests {
             datetime: DateTimeAsMicroseconds::now(),
             instrument: "ATOMUSDT".to_string(),
         };
-        let position = order.open(&bidask, &prices);
 
-        position
+        order.open(&bidask, &prices)
     }
 }

@@ -157,7 +157,7 @@ impl PendingPosition {
             let id = BidAsk::generate_id(asset, &self.order.base_asset);
 
             if id == bidask.instrument {
-                let price = bidask.get_asset_price(&asset, &OrderSide::Sell);
+                let price = bidask.get_asset_price(asset, &OrderSide::Sell);
                 let current_asset_price = self.current_asset_prices.get_mut(asset);
 
                 if let Some(current_asset_price) = current_asset_price {
@@ -185,12 +185,12 @@ impl PendingPosition {
                     activate_asset_prices: self.current_asset_prices.to_owned(),
                     order: self.order,
                     current_price: self.current_price,
-                    current_asset_prices: self.current_asset_prices.to_owned(),
+                    current_asset_prices: self.current_asset_prices,
                     last_update_date: now,
                 });
             }
 
-            return Position::Pending(self);
+            Position::Pending(self)
         } else {
             panic!("PendingPosition without desire price");
         }
@@ -209,7 +209,7 @@ impl PendingPosition {
     }
 
     pub fn close(self, reason: ClosePositionReason) -> ClosedPosition {
-        return ClosedPosition {
+        ClosedPosition {
             pnl: None,
             asset_pnls: HashMap::new(),
             open_date: self.open_date,
@@ -223,7 +223,7 @@ impl PendingPosition {
             close_asset_prices: self.current_asset_prices.to_owned(),
             order: self.order,
             id: self.id,
-        };
+        }
     }
 }
 
@@ -266,7 +266,7 @@ impl ActivePosition {
             let id = BidAsk::generate_id(asset, &self.order.base_asset);
 
             if id == bidask.instrument {
-                let price = bidask.get_asset_price(&asset, &OrderSide::Sell);
+                let price = bidask.get_asset_price(asset, &OrderSide::Sell);
                 let current_asset_price = self.current_asset_prices.get_mut(asset);
 
                 if let Some(current_asset_price) = current_asset_price {
@@ -281,7 +281,7 @@ impl ActivePosition {
     pub fn close(self, reason: ClosePositionReason) -> ClosedPosition {
         let asset_pnls = self.calculate_asset_pnls();
 
-        return ClosedPosition {
+        ClosedPosition {
             pnl: Some(calculate_total_amount(
                 &asset_pnls,
                 &self.current_asset_prices,
@@ -298,7 +298,7 @@ impl ActivePosition {
             close_asset_prices: self.current_asset_prices.to_owned(),
             order: self.order,
             id: self.id,
-        };
+        }
     }
 
     pub fn try_close(self) -> Position {
@@ -366,12 +366,10 @@ impl ActivePosition {
     fn calculate_pnl(&self, invest_amount: f64) -> f64 {
         let volume = self.order.calculate_volume(invest_amount);
 
-        let pnl = match self.order.side {
+        match self.order.side {
             OrderSide::Buy => (self.current_price / self.activate_price - 1.0) * volume,
             OrderSide::Sell => (self.current_price / self.activate_price - 1.0) * -volume,
-        };
-
-        pnl
+        }
     }
 
     pub fn calculate_asset_pnls(&self) -> HashMap<String, f64> {
@@ -436,7 +434,7 @@ mod tests {
             funding_fee_period: None,
             invest_assets: HashMap::from([("BTC".to_string(), 100.0)]),
             leverage: 1.0,
-            side: crate::orders::OrderSide::Buy,
+            side: OrderSide::Buy,
             take_profit: None,
             stop_loss: None,
             stop_out_percent: 10.0,
@@ -509,7 +507,7 @@ mod tests {
             instrument,
             trader_id: "test".to_string(),
             wallet_id: "test".to_string(),
-            created_date: rust_extensions::date_time::DateTimeAsMicroseconds::now(),
+            created_date: DateTimeAsMicroseconds::now(),
             desire_price: None,
             funding_fee_period: None,
             invest_assets,

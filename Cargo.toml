@@ -1,6 +1,6 @@
 [package]
 name = "trading-sdk"
-version = "0.4.15"
+version = "0.5.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -12,3 +12,4 @@ tokio = { version = "*", features = ["full"] }
 uuid = { version = "*", features = ["v4"] }
 num_enum = "*"
 ahash = "*"
+slotmap = "*"

@@ -49,17 +49,17 @@ pub struct TakeProfitConfig {
 
 impl TakeProfitConfig {
     pub fn is_triggered(&self, pnl: f64, close_price: f64, side: &OrderSide) -> bool {
-        return match self.unit {
+        match self.unit {
             AutoClosePositionUnit::AssetAmount => self.value >= pnl,
             AutoClosePositionUnit::PriceRate => match side {
                 OrderSide::Buy => {
-                    return self.value <= close_price;
+                    self.value <= close_price
                 }
                 OrderSide::Sell => {
-                    return self.value >= close_price;
+                    self.value >= close_price
                 }
             },
-        };
+        }
     }
 }
 
@@ -71,17 +71,17 @@ pub struct StopLossConfig {
 
 impl StopLossConfig {
     pub fn is_triggered(&self, pnl: f64, close_price: f64, side: &OrderSide) -> bool {
-        return match self.unit {
+        match self.unit {
             AutoClosePositionUnit::AssetAmount => self.value >= pnl,
             AutoClosePositionUnit::PriceRate => match side {
                 OrderSide::Buy => {
-                    return self.value >= close_price;
+                    self.value >= close_price
                 }
                 OrderSide::Sell => {
-                    return self.value <= close_price;
+                    self.value <= close_price
                 }
             },
-        };
+        }
     }
 }
 
@@ -94,14 +94,26 @@ pub enum AutoClosePositionUnit {
 
 impl Order {
     pub fn get_invest_instruments(&self) -> Vec<String> {
-        let mut instuments = Vec::with_capacity(self.invest_assets.len());
+        let mut instruments = Vec::with_capacity(self.invest_assets.len());
 
         for asset in self.invest_assets.keys() {
             let instrument = BidAsk::generate_id(asset, &self.base_asset);
-            instuments.push(instrument);
+            instruments.push(instrument);
         }
 
-        instuments
+        instruments
+    }
+
+    pub fn get_instruments(&self) -> Vec<String> {
+        let mut instruments = Vec::with_capacity(self.invest_assets.len() + 1);
+        instruments.push(self.instrument.clone());
+
+        for asset in self.invest_assets.keys() {
+            let instrument = BidAsk::generate_id(asset, &self.base_asset);
+            instruments.push(instrument);
+        }
+
+        instruments
     }
 
     pub fn get_type(&self) -> OrderType {
