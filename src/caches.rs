@@ -116,13 +116,7 @@ impl PositionsByIds {
     }
 
     pub fn remove(&mut self, id: &str) -> Option<Arc<Position>> {
-        let position = self.positions_by_ids.remove(id);
-
-        if let Some(position) = position {
-            Some(position)
-        } else {
-            None
-        }
+        self.positions_by_ids.remove(id)
     }
 }
 
@@ -156,7 +150,7 @@ impl PositionsCache {
             }
         }
 
-        return true;
+        true
     }
 
     pub fn add(&mut self, position: Position) {
@@ -223,7 +217,7 @@ impl PositionsCache {
             return wallet_positions
                 .get_all_positions()
                 .into_iter()
-                .map(|p| Arc::clone(p))
+                .map(Arc::clone)
                 .collect();
         }
 
