@@ -4,15 +4,22 @@ use std::{
     mem,
     sync::Arc,
 };
+use ahash::AHashMap;
 
 pub struct BidAsksCache {
-    bidasks_by_instruments: HashMap<String, BidAsk>,
+    bidasks_by_instruments: AHashMap<String, BidAsk>,
 }
 
 impl BidAsksCache {
-    pub fn new(bidasks_by_instruments: HashMap<String, BidAsk>) -> Self {
+    pub fn new(bidasks: Vec<BidAsk>) -> Self {
+        let mut map = AHashMap::with_capacity(bidasks.len());
+
+        for bidask in bidasks.into_iter() {
+            map.insert(bidask.instrument.clone(), bidask);
+        }
+
         Self {
-            bidasks_by_instruments,
+            bidasks_by_instruments: map,
         }
     }
 
@@ -33,8 +40,8 @@ impl BidAsksCache {
         return bidask;
     }
 
-    pub fn find(&self, base_asset: &str, assets: &[&String]) -> HashMap<String, BidAsk> {
-        let mut bidasks = HashMap::with_capacity(assets.len());
+    pub fn find(&self, base_asset: &str, assets: &[&String]) -> AHashMap<String, BidAsk> {
+        let mut bidasks = AHashMap::with_capacity(assets.len());
 
         for asset in assets.iter() {
             let instrument = BidAsk::generate_id(asset, base_asset);
@@ -45,11 +52,11 @@ impl BidAsksCache {
             }
         }
 
-        return bidasks;
+        bidasks
     }
 
-    pub fn find_prices(&self, to_asset: &str, from_assets: &[&String]) -> HashMap<String, f64> {
-        let mut prices = HashMap::with_capacity(from_assets.len());
+    pub fn find_prices(&self, to_asset: &str, from_assets: &[&String]) -> AHashMap<String, f64> {
+        let mut prices = AHashMap::with_capacity(from_assets.len());
 
         for asset in from_assets.into_iter() {
             if *asset == to_asset {
@@ -65,7 +72,7 @@ impl BidAsksCache {
             }
         }
 
-        return prices;
+        prices
     }
 }
 
