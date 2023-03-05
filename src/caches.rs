@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::mem;
 use crate::positions::{BidAsk, Position};
 use ahash::{AHashMap, AHashSet};
@@ -34,8 +35,8 @@ impl BidAsksCache {
         self.bidasks_by_instruments.get(instrument)
     }
 
-    pub fn find(&self, base_asset: &str, assets: &[&String]) -> AHashMap<String, BidAsk> {
-        let mut bidasks = AHashMap::with_capacity(assets.len());
+    pub fn find(&self, base_asset: &str, assets: &[&String]) -> HashMap<String, BidAsk> {
+        let mut bidasks = HashMap::with_capacity(assets.len());
 
         for asset in assets.iter() {
             let instrument = BidAsk::generate_id(asset, base_asset);
@@ -49,8 +50,8 @@ impl BidAsksCache {
         bidasks
     }
 
-    pub fn find_prices(&self, to_asset: &str, from_assets: &[&String]) -> AHashMap<String, f64> {
-        let mut prices = AHashMap::with_capacity(from_assets.len());
+    pub fn find_prices(&self, to_asset: &str, from_assets: &[&String]) -> HashMap<String, f64> {
+        let mut prices = HashMap::with_capacity(from_assets.len());
 
         for asset in from_assets.iter() {
             if *asset == to_asset {
