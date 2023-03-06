@@ -45,8 +45,8 @@ impl PositionsMonitor {
         let invest_instruments = position.get_order().get_instruments();
 
         for invest_instrument in invest_instruments {
-            if let Some(keys) = self.ids_by_instruments.get_mut(&invest_instrument) {
-                keys.insert(id.clone());
+            if let Some(ids) = self.ids_by_instruments.get_mut(&invest_instrument) {
+                ids.insert(id.clone());
             } else {
                 self.ids_by_instruments
                     .insert(invest_instrument, AHashSet::from([id.clone()]));
