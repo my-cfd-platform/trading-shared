@@ -63,18 +63,18 @@ impl PositionsMonitor {
 
         if let Some(ids) = ids {
             let mut events = Vec::with_capacity(ids.len());
-            let mut removed = Vec::with_capacity(ids.len() / 5); // assume that max of 1/5 positions will be closed
 
-            for id in ids.iter() {
+            ids.retain(|id| {
                 let position = self.positions_cache.remove(id);
+                let mut is_in_cache = false;
 
                 if let Some(position) = position {
                     match position {
                         Position::Closed(closed_position) => {
-                            removed.push(closed_position.id.clone());
                             events.push(PositionMonitoringEvent::PositionClosed(
-                                closed_position.to_owned(),
+                                closed_position,
                             ));
+                            is_in_cache = false;
                         }
                         Position::Pending(mut pending_position) => {
                             pending_position.update(bidask);
@@ -90,10 +90,12 @@ impl PositionsMonitor {
                                     events.push(PositionMonitoringEvent::PositionActivated(
                                         position.clone(),
                                     ));
-                                    self.positions_cache.add(Position::Active(position))
+                                    self.positions_cache.add(Position::Active(position));
+                                    is_in_cache = true;
                                 }
                                 Position::Pending(position) => {
-                                    self.positions_cache.add(Position::Pending(position))
+                                    self.positions_cache.add(Position::Pending(position));
+                                    is_in_cache = true;
                                 }
                             }
                         }
@@ -103,13 +105,14 @@ impl PositionsMonitor {
 
                             match position {
                                 Position::Closed(closed_position) => {
-                                    removed.push(closed_position.id.clone());
                                     events.push(PositionMonitoringEvent::PositionClosed(
                                         closed_position,
-                                    ))
+                                    ));
+                                    is_in_cache = true;
                                 }
                                 Position::Active(position) => {
-                                    self.positions_cache.add(Position::Active(position))
+                                    self.positions_cache.add(Position::Active(position));
+                                    is_in_cache = true;
                                 }
                                 Position::Pending(_) => {
                                     panic!("Active position can't become Pending")
@@ -118,9 +121,9 @@ impl PositionsMonitor {
                         }
                     }
                 }
-            }
 
-            ids.retain(|id| !removed.contains(id));
+                is_in_cache
+            });
         }
 
         Vec::with_capacity(0)
