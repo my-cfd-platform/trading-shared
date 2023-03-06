@@ -65,64 +65,56 @@ impl PositionsMonitor {
             let mut events = Vec::with_capacity(ids.len());
 
             ids.retain(|id| {
-                let position = self.positions_cache.remove(id);
-                let mut is_in_cache = false;
+                let position = self.positions_cache.get_mut(id);
 
-                if let Some(position) = position {
-                    match position {
-                        Position::Closed(closed_position) => {
-                            events.push(PositionMonitoringEvent::PositionClosed(
-                                closed_position,
-                            ));
-                            is_in_cache = false;
-                        }
-                        Position::Pending(mut pending_position) => {
-                            pending_position.update(bidask);
-                            let position = pending_position.try_activate();
+                let Some(position) = position else {
+                    return false;
+                };
 
-                            match position {
-                                Position::Closed(_) => {
-                                    panic!(
-                                        "Pending position can't become Closed after try_activate"
-                                    )
-                                }
-                                Position::Active(position) => {
-                                    events.push(PositionMonitoringEvent::PositionActivated(
-                                        position.clone(),
-                                    ));
-                                    self.positions_cache.add(Position::Active(position));
-                                    is_in_cache = true;
-                                }
-                                Position::Pending(position) => {
-                                    self.positions_cache.add(Position::Pending(position));
-                                    is_in_cache = true;
-                                }
-                            }
-                        }
-                        Position::Active(mut active_position) => {
-                            active_position.update(bidask);
-                            let position = active_position.try_close();
+                return match position {
+                    Position::Closed(_) => {
+                        let position = match self.positions_cache.remove(id).expect("Checked") {
+                            Position::Closed(position) => position,
+                            _ => panic!("Checked"),
+                        };
+                        events.push(PositionMonitoringEvent::PositionClosed(position));
 
-                            match position {
-                                Position::Closed(closed_position) => {
-                                    events.push(PositionMonitoringEvent::PositionClosed(
-                                        closed_position,
-                                    ));
-                                    is_in_cache = true;
-                                }
-                                Position::Active(position) => {
-                                    self.positions_cache.add(Position::Active(position));
-                                    is_in_cache = true;
-                                }
-                                Position::Pending(_) => {
-                                    panic!("Active position can't become Pending")
-                                }
-                            }
-                        }
+                        false
                     }
-                }
+                    Position::Pending(position) => {
+                        position.update(bidask);
 
-                is_in_cache
+                        if position.can_activate() {
+                            let position = match self.positions_cache.remove(id).expect("Checked") {
+                                Position::Pending(position) => position,
+                                _ => panic!("Checked"),
+                            };
+                            let position = position.into_active();
+                            events
+                                .push(PositionMonitoringEvent::PositionActivated(position.clone()));
+                            self.positions_cache.add(Position::Active(position));
+                        }
+
+                        true
+                    }
+                    Position::Active(position) => {
+                        position.update(bidask);
+
+                        return if let Some(reason) = position.determine_close_reason() {
+                            let position =
+                                match self.positions_cache.remove(id).expect("Must exists") {
+                                    Position::Active(position) => position,
+                                    _ => panic!("Checked"),
+                                };
+                            let position = position.close(reason);
+                            events.push(PositionMonitoringEvent::PositionClosed(position));
+
+                            false
+                        } else {
+                            true
+                        };
+                    }
+                };
             });
         }
 
@@ -136,6 +128,4 @@ pub enum PositionMonitoringEvent {
 }
 
 #[cfg(test)]
-mod tests {
-
-}
+mod tests {}

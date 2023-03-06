@@ -146,6 +146,15 @@ impl PendingPosition {
         self.last_update_date = DateTimeAsMicroseconds::now();
     }
 
+    pub fn can_activate(&self) -> bool {
+        let Some(desired_price) = self.order.desire_price else {
+            panic!("PendingPosition without desire price");
+        };
+
+        self.current_price >= desired_price && self.order.side == OrderSide::Sell
+            || self.current_price <= desired_price && self.order.side == OrderSide::Buy
+    }
+
     fn try_update_price(&mut self, bidask: &BidAsk) {
         if self.order.instrument == bidask.instrument {
             self.current_price = bidask.get_open_price(&self.order.side)
@@ -170,29 +179,31 @@ impl PendingPosition {
     }
 
     pub fn try_activate(self) -> Position {
-        if let Some(desired_price) = self.order.desire_price {
-            if self.current_price >= desired_price && self.order.side == OrderSide::Sell
-                || self.current_price <= desired_price && self.order.side == OrderSide::Buy
-            {
-                let now = DateTimeAsMicroseconds::now();
+        if self.can_activate() {
+            return Position::Pending(self);
+        }
 
-                return Position::Active(ActivePosition {
-                    id: self.id,
-                    open_date: self.open_date,
-                    open_asset_prices: self.open_asset_prices,
-                    activate_price: self.current_price,
-                    activate_date: now,
-                    activate_asset_prices: self.current_asset_prices.to_owned(),
-                    order: self.order,
-                    current_price: self.current_price,
-                    current_asset_prices: self.current_asset_prices,
-                    last_update_date: now,
-                });
-            }
+        Position::Active(self.into_active())
+    }
 
-            Position::Pending(self)
-        } else {
-            panic!("PendingPosition without desire price");
+    pub fn into_active(self) -> ActivePosition {
+        if self.can_activate() {
+            panic!("Can't activate");
+        }
+
+        let now = DateTimeAsMicroseconds::now();
+
+        ActivePosition {
+            id: self.id,
+            open_date: self.open_date,
+            open_asset_prices: self.open_asset_prices,
+            activate_price: self.current_price,
+            activate_date: now,
+            activate_asset_prices: self.current_asset_prices.to_owned(),
+            order: self.order,
+            current_price: self.current_price,
+            current_asset_prices: self.current_asset_prices,
+            last_update_date: now,
         }
     }
 
@@ -301,20 +312,28 @@ impl ActivePosition {
         }
     }
 
-    pub fn try_close(self) -> Position {
+    pub fn determine_close_reason(&self) -> Option<ClosePositionReason> {
         if self.is_stop_out() {
-            return Position::Closed(self.close(ClosePositionReason::StopOut));
+            return Some(ClosePositionReason::StopOut);
         }
 
         if self.is_stop_loss() {
-            return Position::Closed(self.close(ClosePositionReason::StopLoss));
+            return Some(ClosePositionReason::StopLoss);
         }
 
         if self.is_take_profit() {
-            return Position::Closed(self.close(ClosePositionReason::TakeProfit));
+            return Some(ClosePositionReason::StopLoss);
         }
 
-        Position::Active(self)
+        None
+    }
+
+    pub fn try_close(self) -> Position {        
+        let Some(reason) = self.determine_close_reason() else {
+            return Position::Active(self);
+        };
+
+        Position::Closed(self.close(reason))
     }
 
     fn is_take_profit(&self) -> bool {
