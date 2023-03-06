@@ -179,7 +179,7 @@ impl PendingPosition {
     }
 
     pub fn try_activate(self) -> Position {
-        if self.can_activate() {
+        if !self.can_activate() {
             return Position::Pending(self);
         }
 
