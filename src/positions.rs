@@ -187,7 +187,7 @@ impl PendingPosition {
     }
 
     pub fn into_active(self) -> ActivePosition {
-        if self.can_activate() {
+        if !self.can_activate() {
             panic!("Can't activate");
         }
 
@@ -328,7 +328,7 @@ impl ActivePosition {
         None
     }
 
-    pub fn try_close(self) -> Position {        
+    pub fn try_close(self) -> Position {
         let Some(reason) = self.determine_close_reason() else {
             return Position::Active(self);
         };
