@@ -61,64 +61,66 @@ impl PositionsMonitor {
     pub fn update(&mut self, bidask: &BidAsk) -> Vec<PositionMonitoringEvent> {
         let ids = self.ids_by_instruments.get_mut(&bidask.instrument);
 
-        if let Some(ids) = ids {
-            let mut events = Vec::with_capacity(ids.len());
+        let Some(ids) = ids else {
+            return Vec::with_capacity(0);
+        };
 
-            ids.retain(|id| {
-                let position = self.positions_cache.get_mut(id);
+        let mut events = Vec::with_capacity(ids.len());
 
-                let Some(position) = position else {
-                    return false;
-                };
+        ids.retain(|id| {
+            let position = self.positions_cache.get_mut(id);
 
-                return match position {
-                    Position::Closed(_) => {
+            let Some(position) = position else {
+                return false;
+            };
+
+            return match position {
+                Position::Closed(_) => {
+                    let position = match self.positions_cache.remove(id).expect("Checked") {
+                        Position::Closed(position) => position,
+                        _ => panic!("Checked"),
+                    };
+                    events.push(PositionMonitoringEvent::PositionClosed(position));
+
+                    false
+                }
+                Position::Pending(position) => {
+                    position.update(bidask);
+
+                    if position.can_activate() {
                         let position = match self.positions_cache.remove(id).expect("Checked") {
-                            Position::Closed(position) => position,
+                            Position::Pending(position) => position,
                             _ => panic!("Checked"),
                         };
+                        let position = position.into_active();
+                        events
+                            .push(PositionMonitoringEvent::PositionActivated(position.clone()));
+                        self.positions_cache.add(Position::Active(position));
+                    }
+
+                    true
+                }
+                Position::Active(position) => {
+                    position.update(bidask);
+
+                    return if let Some(reason) = position.determine_close_reason() {
+                        let position =
+                            match self.positions_cache.remove(id).expect("Must exists") {
+                                Position::Active(position) => position,
+                                _ => panic!("Checked"),
+                            };
+                        let position = position.close(reason);
                         events.push(PositionMonitoringEvent::PositionClosed(position));
 
                         false
-                    }
-                    Position::Pending(position) => {
-                        position.update(bidask);
-
-                        if position.can_activate() {
-                            let position = match self.positions_cache.remove(id).expect("Checked") {
-                                Position::Pending(position) => position,
-                                _ => panic!("Checked"),
-                            };
-                            let position = position.into_active();
-                            events
-                                .push(PositionMonitoringEvent::PositionActivated(position.clone()));
-                            self.positions_cache.add(Position::Active(position));
-                        }
-
+                    } else {
                         true
-                    }
-                    Position::Active(position) => {
-                        position.update(bidask);
+                    };
+                }
+            };
+        });
 
-                        return if let Some(reason) = position.determine_close_reason() {
-                            let position =
-                                match self.positions_cache.remove(id).expect("Must exists") {
-                                    Position::Active(position) => position,
-                                    _ => panic!("Checked"),
-                                };
-                            let position = position.close(reason);
-                            events.push(PositionMonitoringEvent::PositionClosed(position));
-
-                            false
-                        } else {
-                            true
-                        };
-                    }
-                };
-            });
-        }
-
-        Vec::with_capacity(0)
+        events
     }
 }
 
