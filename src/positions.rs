@@ -322,7 +322,7 @@ impl ActivePosition {
         }
 
         if self.is_take_profit() {
-            return Some(ClosePositionReason::StopLoss);
+            return Some(ClosePositionReason::TakeProfit);
         }
 
         None
