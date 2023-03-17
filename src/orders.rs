@@ -72,7 +72,7 @@ pub struct StopLossConfig {
 impl StopLossConfig {
     pub fn is_triggered(&self, pnl: f64, close_price: f64, side: &OrderSide) -> bool {
         match self.unit {
-            AutoClosePositionUnit::AssetAmount => pnl <= self.value,
+            AutoClosePositionUnit::AssetAmount => pnl.abs() >= self.value,
             AutoClosePositionUnit::PriceRate => match side {
                 OrderSide::Buy => {
                     self.value >= close_price
