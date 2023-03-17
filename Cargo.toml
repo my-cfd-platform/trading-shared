@@ -12,4 +12,3 @@ tokio = { version = "*", features = ["full"] }
 uuid = { version = "*", features = ["v4"] }
 num_enum = "*"
 ahash = "*"
-slotmap = "*"
