@@ -88,8 +88,8 @@ impl StopLossConfig {
 #[derive(Debug, Clone, IntoPrimitive, TryFromPrimitive)]
 #[repr(i32)]
 pub enum AutoClosePositionUnit {
-    AssetAmount,
-    PriceRate,
+    AssetAmount = 0,
+    PriceRate = 1,
 }
 
 impl Order {
