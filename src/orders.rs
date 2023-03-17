@@ -41,6 +41,7 @@ pub enum OrderSide {
     Buy = 0,
     Sell = 1,
 }
+
 #[derive(Debug, Clone)]
 pub struct TakeProfitConfig {
     pub value: f64,
@@ -50,14 +51,10 @@ pub struct TakeProfitConfig {
 impl TakeProfitConfig {
     pub fn is_triggered(&self, pnl: f64, close_price: f64, side: &OrderSide) -> bool {
         match self.unit {
-            AutoClosePositionUnit::AssetAmount => pnl >= self.value  ,
+            AutoClosePositionUnit::AssetAmount => pnl >= self.value,
             AutoClosePositionUnit::PriceRate => match side {
-                OrderSide::Buy => {
-                    self.value <= close_price
-                }
-                OrderSide::Sell => {
-                    self.value >= close_price
-                }
+                OrderSide::Buy => self.value <= close_price,
+                OrderSide::Sell => self.value >= close_price,
             },
         }
     }
@@ -74,12 +71,8 @@ impl StopLossConfig {
         match self.unit {
             AutoClosePositionUnit::AssetAmount => pnl.abs() >= self.value,
             AutoClosePositionUnit::PriceRate => match side {
-                OrderSide::Buy => {
-                    self.value >= close_price
-                }
-                OrderSide::Sell => {
-                    self.value <= close_price
-                }
+                OrderSide::Buy => self.value >= close_price,
+                OrderSide::Sell => self.value <= close_price,
             },
         }
     }
