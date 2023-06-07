@@ -103,6 +103,10 @@ impl PositionsMonitor {
                 Position::Active(position) => {
                     position.update(bidask);
 
+                    if position.is_margin_call() {
+                        events.push(PositionMonitoringEvent::PositionMarginCall(position.clone()));
+                    }
+
                     if let Some(reason) = position.determine_close_reason() {
                         let position =
                             match self.positions_cache.remove(id).expect("Must exists") {
@@ -127,6 +131,7 @@ impl PositionsMonitor {
 pub enum PositionMonitoringEvent {
     PositionClosed(ClosedPosition),
     PositionActivated(ActivePosition),
+    PositionMarginCall(ActivePosition),
 }
 
 #[cfg(test)]
