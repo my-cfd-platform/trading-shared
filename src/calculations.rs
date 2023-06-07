@@ -29,9 +29,8 @@ pub fn get_open_price(
 
 pub fn calculate_margin_percent(invest_amount: f64, pnl: f64) -> f64 {
     let margin = pnl + invest_amount;
-    let margin_percent = margin / invest_amount * 100.0;
 
-    margin_percent
+    margin / invest_amount * 100.0
 }
 
 pub fn calculate_total_amount(
@@ -43,7 +42,7 @@ pub fn calculate_total_amount(
     for (asset, amount) in asset_amounts.iter() {
         let price = asset_prices
             .get(asset)
-            .expect(&format!("Price not found for {}", asset));
+            .unwrap_or_else(|| panic!("Price not found for {}", asset));
         let estimated_amount = price * amount;
         total_amount += estimated_amount;
     }
