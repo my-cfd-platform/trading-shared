@@ -74,7 +74,7 @@ impl PositionsMonitor {
                 return false;
             };
 
-            return match position {
+            match position {
                 Position::Closed(_) => {
                     let position = match self.positions_cache.remove(id).expect("Checked") {
                         Position::Closed(position) => position,
@@ -103,7 +103,7 @@ impl PositionsMonitor {
                 Position::Active(position) => {
                     position.update(bidask);
 
-                    return if let Some(reason) = position.determine_close_reason() {
+                    if let Some(reason) = position.determine_close_reason() {
                         let position =
                             match self.positions_cache.remove(id).expect("Must exists") {
                                 Position::Active(position) => position,
@@ -115,9 +115,9 @@ impl PositionsMonitor {
                         false
                     } else {
                         true
-                    };
+                    }
                 }
-            };
+            }
         });
 
         events
