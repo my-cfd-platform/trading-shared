@@ -9,9 +9,8 @@ pub fn get_close_price(
     let bidask = bidasks
         .get(instrument)
         .expect(&format!("BidAsk not found for {}", instrument));
-    let price = bidask.get_close_price(side);
 
-    return price;
+    bidask.get_close_price(side)
 }
 
 pub fn get_open_price(
@@ -22,9 +21,8 @@ pub fn get_open_price(
     let bidask = bidasks
         .get(instrument)
         .expect(&format!("BidAsk not found for {}", instrument));
-    let price = bidask.get_open_price(side);
 
-    return price;
+    bidask.get_open_price(side)
 }
 
 pub fn calculate_margin_percent(invest_amount: f64, pnl: f64) -> f64 {
