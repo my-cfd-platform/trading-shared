@@ -107,6 +107,10 @@ impl PositionsMonitor {
                         events.push(PositionMonitoringEvent::PositionMarginCall(position.clone()));
                     }
 
+                    if position.is_top_up() {
+                        events.push(PositionMonitoringEvent::PositionTopUp(position.clone()));
+                    }
+
                     if let Some(reason) = position.determine_close_reason() {
                         let position =
                             match self.positions_cache.remove(id).expect("Must exists") {
@@ -132,6 +136,7 @@ pub enum PositionMonitoringEvent {
     PositionClosed(ClosedPosition),
     PositionActivated(ActivePosition),
     PositionMarginCall(ActivePosition),
+    PositionTopUp(ActivePosition),
 }
 
 #[cfg(test)]

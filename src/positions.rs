@@ -382,6 +382,16 @@ impl ActivePosition {
         100.0 - margin_percent >= self.order.margin_call_percent
     }
 
+    pub fn is_top_up(&self) -> bool {
+        let invest_amount = self
+            .order
+            .calculate_invest_amount(&self.current_asset_prices);
+        let pnl = self.calculate_pnl(invest_amount);
+        let margin_percent = calculate_margin_percent(invest_amount, pnl);
+
+        100.0 - margin_percent >= self.order.top_up_percent
+    }
+
     fn calculate_pnl(&self, invest_amount: f64) -> f64 {
         let volume = self.order.calculate_volume(invest_amount);
 
