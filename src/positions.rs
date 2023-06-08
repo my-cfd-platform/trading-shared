@@ -383,6 +383,10 @@ impl ActivePosition {
     }
 
     pub fn is_top_up(&self) -> bool {
+        if !self.order.top_up_enabled {
+            return false;
+        }
+
         let invest_amount = self
             .order
             .calculate_invest_amount(&self.current_asset_prices);
