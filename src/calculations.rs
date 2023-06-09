@@ -31,6 +31,10 @@ pub fn calculate_margin_percent(invest_amount: f64, pnl: f64) -> f64 {
     margin / invest_amount * 100.0
 }
 
+pub fn calculate_percent(from_number: f64, number: f64) -> f64 {
+    number / from_number * 100.0
+}
+
 pub fn calculate_total_amount(
     asset_amounts: &HashMap<String, f64>,
     asset_prices: &HashMap<String, f64>,

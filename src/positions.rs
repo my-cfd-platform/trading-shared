@@ -1,3 +1,6 @@
+use std::cmp;
+use crate::calculations::calculate_percent;
+use crate::top_ups::TopUp;
 use crate::{
     calculations::{calculate_margin_percent, calculate_total_amount},
     orders::{Order, OrderSide, StopLossConfig, TakeProfitConfig},
@@ -6,7 +9,6 @@ use num_enum::{IntoPrimitive, TryFromPrimitive};
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 use std::collections::HashMap;
 use uuid::Uuid;
-use crate::top_ups::TopUp;
 
 #[derive(Debug, Clone, IntoPrimitive, TryFromPrimitive)]
 #[repr(i32)]
@@ -207,7 +209,7 @@ impl PendingPosition {
             last_update_date: now,
             top_ups: Vec::new(),
             current_pnl: 0.0,
-            current_margin_percent: 0.0,
+            current_loss_percent: 0.0,
         }
     }
 
@@ -257,7 +259,7 @@ pub struct ActivePosition {
     pub last_update_date: DateTimeAsMicroseconds,
     pub top_ups: Vec<TopUp>,
     pub current_pnl: f64,
-    pub current_margin_percent: f64,
+    pub current_loss_percent: f64,
 }
 
 impl ActivePosition {
@@ -275,10 +277,13 @@ impl ActivePosition {
         let invest_amount = self
             .order
             .calculate_invest_amount(&self.current_asset_prices);
-        let top_ups_amount = self
-            .calculate_top_ups_amount(&self.current_asset_prices);
+        let top_ups_amount = self.calculate_top_ups_amount(&self.current_asset_prices);
         self.current_pnl = self.calculate_pnl(invest_amount + top_ups_amount, self.activate_price);
-        self.current_margin_percent = calculate_margin_percent(invest_amount, self.current_pnl);
+        if self.current_pnl < 0.0 {
+            self.current_loss_percent = calculate_percent(invest_amount, self.current_pnl) * -1.0;
+        } else {
+            self.current_loss_percent = 0.0;
+        }
     }
 
     fn try_update_price(&mut self, bidask: &BidAsk) {
@@ -367,11 +372,11 @@ impl ActivePosition {
     }
 
     fn is_stop_out(&self) -> bool {
-        100.0 - self.current_margin_percent >= self.order.stop_out_percent
+        self.current_loss_percent >= self.order.stop_out_percent
     }
 
     pub fn is_margin_call(&self) -> bool {
-        100.0 - self.current_margin_percent >= self.order.margin_call_percent
+        self.current_loss_percent >= self.order.margin_call_percent
     }
 
     pub fn is_top_up(&self) -> bool {
@@ -379,7 +384,7 @@ impl ActivePosition {
             return false;
         }
 
-        100.0 - self.current_margin_percent >= self.order.top_up_percent
+        self.current_loss_percent >= self.order.top_up_percent
     }
 
     pub fn calculate_top_ups_amount(&self, asset_prices: &HashMap<String, f64>) -> f64 {
@@ -623,7 +628,7 @@ mod tests {
             order,
             top_ups: Vec::new(),
             current_pnl: 0.0,
-            current_margin_percent: 0.0,
+            current_loss_percent: 0.0,
         }
     }
 }

@@ -179,7 +179,7 @@ impl Order {
             order: self,
             top_ups: Vec::new(),
             current_pnl: 0.0,
-            current_margin_percent: 0.0,
+            current_loss_percent: 0.0,
         }
     }
 
