@@ -6,6 +6,7 @@ use num_enum::{IntoPrimitive, TryFromPrimitive};
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 use std::collections::HashMap;
 use uuid::Uuid;
+use crate::top_ups::TopUp;
 
 #[derive(Debug, Clone, IntoPrimitive, TryFromPrimitive)]
 #[repr(i32)]
@@ -204,6 +205,7 @@ impl PendingPosition {
             current_price: self.current_price,
             current_asset_prices: self.current_asset_prices,
             last_update_date: now,
+            top_ups: Vec::new(),
         }
     }
 
@@ -234,6 +236,7 @@ impl PendingPosition {
             close_asset_prices: self.current_asset_prices.to_owned(),
             order: self.order,
             id: self.id,
+            top_ups: Vec::with_capacity(0),
         }
     }
 }
@@ -250,6 +253,7 @@ pub struct ActivePosition {
     pub current_price: f64,
     pub current_asset_prices: HashMap<String, f64>,
     pub last_update_date: DateTimeAsMicroseconds,
+    pub top_ups: Vec<TopUp>,
 }
 
 impl ActivePosition {
@@ -309,6 +313,7 @@ impl ActivePosition {
             close_asset_prices: self.current_asset_prices.to_owned(),
             order: self.order,
             id: self.id,
+            top_ups: self.top_ups,
         }
     }
 
@@ -439,6 +444,7 @@ pub struct ClosedPosition {
     pub close_asset_prices: HashMap<String, f64>,
     pub pnl: Option<f64>,
     pub asset_pnls: HashMap<String, f64>,
+    pub top_ups: Vec<TopUp>,
 }
 
 impl ClosedPosition {
@@ -580,6 +586,7 @@ mod tests {
             current_asset_prices: asset_prices.to_owned(),
             last_update_date: now,
             order,
+            top_ups: Vec::new(),
         }
     }
 }

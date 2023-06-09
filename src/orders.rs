@@ -177,6 +177,7 @@ impl Order {
             current_asset_prices: asset_prices.to_owned(),
             last_update_date: now,
             order: self,
+            top_ups: Vec::new(),
         }
     }
 
