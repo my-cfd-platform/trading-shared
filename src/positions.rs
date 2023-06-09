@@ -206,6 +206,8 @@ impl PendingPosition {
             current_asset_prices: self.current_asset_prices,
             last_update_date: now,
             top_ups: Vec::new(),
+            current_pnl: 0.0,
+            current_margin_percent: 0.0,
         }
     }
 
@@ -254,6 +256,8 @@ pub struct ActivePosition {
     pub current_asset_prices: HashMap<String, f64>,
     pub last_update_date: DateTimeAsMicroseconds,
     pub top_ups: Vec<TopUp>,
+    pub current_pnl: f64,
+    pub current_margin_percent: f64,
 }
 
 impl ActivePosition {
@@ -268,6 +272,13 @@ impl ActivePosition {
     pub fn update(&mut self, bidask: &BidAsk) {
         self.try_update_price(bidask);
         self.try_update_asset_price(bidask);
+        let invest_amount = self
+            .order
+            .calculate_invest_amount(&self.current_asset_prices);
+        let top_ups_amount = self
+            .calculate_top_ups_amount(&self.current_asset_prices);
+        self.current_pnl = self.calculate_pnl(invest_amount + top_ups_amount, self.activate_price);
+        self.current_margin_percent = calculate_margin_percent(invest_amount, self.current_pnl);
     }
 
     fn try_update_price(&mut self, bidask: &BidAsk) {
@@ -294,28 +305,7 @@ impl ActivePosition {
     }
 
     pub fn close(self, reason: ClosePositionReason) -> ClosedPosition {
-        let mut asset_pnls = HashMap::new();
-
-        for (asset, amount) in self.calculate_invest_pnls().into_iter() {
-            let asset_pnl = asset_pnls.get_mut(&asset);
-
-            if let Some(asset_pnl) = asset_pnl {
-                *asset_pnl += amount;
-            } else {
-                asset_pnls.insert(asset, amount);
-            }
-        }
-
-        for (asset, amount) in self.calculate_top_ups_pnls().into_iter() {
-            let asset_pnl = asset_pnls.get_mut(&asset);
-
-            if let Some(asset_pnl) = asset_pnl {
-                *asset_pnl += amount;
-            } else {
-                asset_pnls.insert(asset, amount);
-            }
-        }
-
+        let asset_pnls = self.calculate_asset_pnls();
         let pnl = calculate_total_amount(&asset_pnls, &self.current_asset_prices);
 
         ClosedPosition {
@@ -362,12 +352,7 @@ impl ActivePosition {
 
     fn is_take_profit(&self) -> bool {
         if let Some(take_profit_config) = self.order.take_profit.as_ref() {
-            let invest_amount = self
-                .order
-                .calculate_invest_amount(&self.current_asset_prices);
-            let pnl = self.calculate_pnl(invest_amount, self.activate_price);
-
-            take_profit_config.is_triggered(pnl, self.current_price, &self.order.side)
+            take_profit_config.is_triggered(self.current_pnl, self.current_price, &self.order.side)
         } else {
             false
         }
@@ -375,35 +360,18 @@ impl ActivePosition {
 
     fn is_stop_loss(&self) -> bool {
         if let Some(stop_loss_config) = self.order.stop_loss.as_ref() {
-            let invest_amount = self
-                .order
-                .calculate_invest_amount(&self.current_asset_prices);
-            let pnl = self.calculate_pnl(invest_amount, self.activate_price);
-
-            stop_loss_config.is_triggered(pnl, self.current_price, &self.order.side)
+            stop_loss_config.is_triggered(self.current_pnl, self.current_price, &self.order.side)
         } else {
             false
         }
     }
 
     fn is_stop_out(&self) -> bool {
-        let invest_amount = self
-            .order
-            .calculate_invest_amount(&self.current_asset_prices);
-        let pnl = self.calculate_pnl(invest_amount, self.activate_price);
-        let margin_percent = calculate_margin_percent(invest_amount, pnl);
-
-        100.0 - margin_percent >= self.order.stop_out_percent
+        100.0 - self.current_margin_percent >= self.order.stop_out_percent
     }
 
     pub fn is_margin_call(&self) -> bool {
-        let invest_amount = self
-            .order
-            .calculate_invest_amount(&self.current_asset_prices);
-        let pnl = self.calculate_pnl(invest_amount, self.activate_price);
-        let margin_percent = calculate_margin_percent(invest_amount, pnl);
-
-        100.0 - margin_percent >= self.order.margin_call_percent
+        100.0 - self.current_margin_percent >= self.order.margin_call_percent
     }
 
     pub fn is_top_up(&self) -> bool {
@@ -411,13 +379,17 @@ impl ActivePosition {
             return false;
         }
 
-        let invest_amount = self
-            .order
-            .calculate_invest_amount(&self.current_asset_prices);
-        let pnl = self.calculate_pnl(invest_amount, self.activate_price);
-        let margin_percent = calculate_margin_percent(invest_amount, pnl);
+        100.0 - self.current_margin_percent >= self.order.top_up_percent
+    }
 
-        100.0 - margin_percent >= self.order.top_up_percent
+    pub fn calculate_top_ups_amount(&self, asset_prices: &HashMap<String, f64>) -> f64 {
+        let mut top_ups_amount = 0.0;
+
+        for top_up in self.top_ups.iter() {
+            top_ups_amount += calculate_total_amount(&top_up.assets, asset_prices);
+        }
+
+        top_ups_amount
     }
 
     fn calculate_pnl(&self, invest_amount: f64, initial_price: f64) -> f64 {
@@ -427,6 +399,32 @@ impl ActivePosition {
             OrderSide::Buy => (self.current_price / initial_price - 1.0) * volume,
             OrderSide::Sell => (self.current_price / initial_price - 1.0) * -volume,
         }
+    }
+
+    pub fn calculate_asset_pnls(&self) -> HashMap<String, f64> {
+        let mut asset_pnls = HashMap::new();
+
+        for (asset, amount) in self.calculate_invest_pnls().into_iter() {
+            let asset_pnl = asset_pnls.get_mut(&asset);
+
+            if let Some(asset_pnl) = asset_pnl {
+                *asset_pnl += amount;
+            } else {
+                asset_pnls.insert(asset, amount);
+            }
+        }
+
+        for (asset, amount) in self.calculate_top_ups_pnls().into_iter() {
+            let asset_pnl = asset_pnls.get_mut(&asset);
+
+            if let Some(asset_pnl) = asset_pnl {
+                *asset_pnl += amount;
+            } else {
+                asset_pnls.insert(asset, amount);
+            }
+        }
+
+        asset_pnls
     }
 
     pub fn calculate_invest_pnls(&self) -> HashMap<String, f64> {
@@ -624,6 +622,8 @@ mod tests {
             last_update_date: now,
             order,
             top_ups: Vec::new(),
+            current_pnl: 0.0,
+            current_margin_percent: 0.0,
         }
     }
 }
