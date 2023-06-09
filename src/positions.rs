@@ -280,7 +280,7 @@ impl ActivePosition {
         let top_ups_amount = self.calculate_top_ups_amount(&self.current_asset_prices);
         self.current_pnl = self.calculate_pnl(invest_amount + top_ups_amount, self.activate_price);
         if self.current_pnl < 0.0 {
-            self.current_loss_percent = calculate_percent(invest_amount, self.current_pnl) * -1.0;
+            self.current_loss_percent = calculate_percent(invest_amount, self.current_pnl.abs());
         } else {
             self.current_loss_percent = 0.0;
         }
