@@ -434,8 +434,7 @@ impl ActivePosition {
 
         for (asset, amount) in self.order.invest_assets.iter() {
             let pnl = self.calculate_pnl(*amount, self.activate_price);
-            let invest_amount = self.order.invest_assets.get(asset).expect("Impossible");
-            let max_loss_amount = invest_amount * -1.0; // limit for isolated trade
+            let max_loss_amount = amount * -1.0; // limit for isolated trade
 
             if pnl < max_loss_amount {
                 pnls_by_assets.insert(asset.to_owned(), max_loss_amount);
