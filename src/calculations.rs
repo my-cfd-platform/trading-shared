@@ -8,7 +8,7 @@ pub fn get_close_price(
 ) -> f64 {
     let bidask = bidasks
         .get(instrument)
-        .expect(&format!("BidAsk not found for {}", instrument));
+        .unwrap_or_else(|| panic!("BidAsk not found for {}", instrument));
 
     bidask.get_close_price(side)
 }
@@ -20,7 +20,7 @@ pub fn get_open_price(
 ) -> f64 {
     let bidask = bidasks
         .get(instrument)
-        .expect(&format!("BidAsk not found for {}", instrument));
+        .unwrap_or_else(|| panic!("BidAsk not found for {}", instrument));
 
     bidask.get_open_price(side)
 }
