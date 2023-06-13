@@ -1,4 +1,3 @@
-use std::cmp;
 use crate::calculations::calculate_percent;
 use crate::top_ups::TopUp;
 use crate::{
@@ -7,6 +6,7 @@ use crate::{
 };
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use rust_extensions::date_time::DateTimeAsMicroseconds;
+use std::cmp;
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -387,11 +387,47 @@ impl ActivePosition {
         self.current_loss_percent >= self.order.top_up_percent
     }
 
-    /// Calculates asset amounts for next top-ups
-    pub fn calculate_top_up_amounts(&self) -> HashMap<String, f64> {
+    /// Calculates total asset amounts invested to position. Including order and all active top-ups
+    pub fn calculate_asset_amounts(&self) -> HashMap<String, f64> {
         let mut amounts = HashMap::with_capacity(self.order.invest_assets.len() + 5);
 
+        for (asset, amount) in self.order.invest_assets.iter() {
+            let total_amount = amounts.get_mut(asset);
+            if let Some(total_amount) = total_amount {
+                *total_amount += amount;
+            } else {
+                amounts.insert(asset.to_owned(), amount.to_owned());
+            }
+        }
+
+        for top_up in self.top_ups.iter() {
+            for (asset, amount) in top_up.assets.iter() {
+                let total_amount = amounts.get_mut(asset);
+                if let Some(total_amount) = total_amount {
+                    *total_amount += amount;
+                } else {
+                    amounts.insert(asset.to_owned(), amount.to_owned());
+                }
+            }
+        }
+
         amounts
+    }
+
+    /// Calculates asset amounts for next top-up
+    pub fn calculate_next_top_up_amounts(&self) -> HashMap<String, f64> {
+        if !self.is_top_up() {
+            return HashMap::with_capacity(0)
+        }
+
+        let asset_amounts = self.calculate_asset_amounts();
+        let mut top_up_amounts = HashMap::with_capacity(self.order.invest_assets.len() + 5);
+
+        for (asset, amount) in asset_amounts.into_iter() {
+            top_up_amounts.insert(asset, amount * self.order.top_up_percent);
+        }
+
+        top_up_amounts
     }
 
     /// Calculates total top-up amount in base asset by position
