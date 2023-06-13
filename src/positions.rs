@@ -387,6 +387,13 @@ impl ActivePosition {
         self.current_loss_percent >= self.order.top_up_percent
     }
 
+    /// Calculates asset amounts for next top-ups
+    pub fn calculate_top_up_amounts(&self) -> HashMap<String, f64> {
+        let mut amounts = HashMap::with_capacity(self.order.invest_assets.len() + 5);
+
+        amounts
+    }
+
     /// Calculates total top-up amount in base asset by position
     pub fn calculate_top_ups_amount(&self, asset_prices: &HashMap<String, f64>) -> f64 {
         let mut top_ups_amount = 0.0;
@@ -461,9 +468,15 @@ impl ActivePosition {
             for (asset, amount) in top_up.assets.iter() {
                 let pnl = self.calculate_pnl(*amount, top_up.instrument_price);
                 let max_loss_amount = amount * -1.0; // limit for isolated trade
+                let pnl = if pnl < max_loss_amount {
+                    max_loss_amount
+                } else {
+                    pnl
+                };
 
-                if pnl < max_loss_amount {
-                    pnls_by_assets.insert(asset.to_owned(), max_loss_amount);
+                let total_asset_pnl = pnls_by_assets.get_mut(asset);
+                if let Some(total_asset_pnl) = total_asset_pnl {
+                    *total_asset_pnl += pnl;
                 } else {
                     pnls_by_assets.insert(asset.to_owned(), pnl);
                 }
