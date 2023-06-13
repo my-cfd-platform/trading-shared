@@ -387,6 +387,7 @@ impl ActivePosition {
         self.current_loss_percent >= self.order.top_up_percent
     }
 
+    /// Calculates total top-up amount in base asset by position
     pub fn calculate_top_ups_amount(&self, asset_prices: &HashMap<String, f64>) -> f64 {
         let mut top_ups_amount = 0.0;
 
@@ -397,6 +398,7 @@ impl ActivePosition {
         top_ups_amount
     }
 
+    /// Calculates total pnl in base asset by position
     fn calculate_pnl(&self, invest_amount: f64, initial_price: f64) -> f64 {
         let volume = self.order.calculate_volume(invest_amount);
 
@@ -406,6 +408,7 @@ impl ActivePosition {
         }
     }
 
+    /// Calculates pnl by all invested assets, includes order, and top-ups
     pub fn calculate_asset_pnls(&self) -> HashMap<String, f64> {
         let mut asset_pnls = HashMap::new();
 
@@ -432,6 +435,7 @@ impl ActivePosition {
         asset_pnls
     }
 
+    /// Calculates pnl by invested assets initially in order
     pub fn calculate_invest_pnls(&self) -> HashMap<String, f64> {
         let mut pnls_by_assets = HashMap::with_capacity(self.order.invest_assets.len());
 
@@ -449,6 +453,7 @@ impl ActivePosition {
         pnls_by_assets
     }
 
+    /// Calculates pnl by invested assets in top-ups
     pub fn calculate_top_ups_pnls(&self) -> HashMap<String, f64> {
         let mut pnls_by_assets = HashMap::new();
 
