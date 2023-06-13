@@ -1,12 +1,11 @@
 use crate::calculations::calculate_percent;
 use crate::top_ups::TopUp;
 use crate::{
-    calculations::{calculate_margin_percent, calculate_total_amount},
+    calculations::{calculate_total_amount},
     orders::{Order, OrderSide, StopLossConfig, TakeProfitConfig},
 };
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use rust_extensions::date_time::DateTimeAsMicroseconds;
-use std::cmp;
 use std::collections::HashMap;
 use uuid::Uuid;
 
