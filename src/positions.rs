@@ -7,6 +7,7 @@ use crate::{
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 use std::collections::HashMap;
+use ahash::{HashSet, HashSetExt};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, IntoPrimitive, TryFromPrimitive)]
@@ -118,6 +119,39 @@ impl Position {
             Position::Active(_position) => PositionStatus::Active,
             Position::Closed(position) => position.get_status(),
         }
+    }
+
+    pub fn get_instruments(&self) -> HashSet<String> {
+        match self {
+            Position::Pending(position) => position.order.get_instruments().into_iter().collect(),
+            Position::Active(position) => {
+                let order_instruments = position.order.get_instruments();
+                let mut instruments = self.get_top_up_instruments(&position.top_ups);
+                instruments.extend(order_instruments.into_iter());
+
+                instruments
+            },
+            Position::Closed(position) => {
+                let order_instruments = position.order.get_instruments();
+                let mut instruments = self.get_top_up_instruments(&position.top_ups);
+                instruments.extend(order_instruments.into_iter());
+
+                instruments
+            },
+        }
+    }
+
+    fn get_top_up_instruments(&self, top_ups: &Vec<TopUp>) -> HashSet<String> {
+        let mut instruments = HashSet::new();
+
+        for top_up in top_ups {
+            for (asset_symbol, _asset_amount) in top_up.assets.iter() {
+                let instrument = format!("{}{}", asset_symbol, self.get_order().base_asset);
+                instruments.insert(instrument);
+            }
+        }
+
+        instruments
     }
 }
 

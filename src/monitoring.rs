@@ -28,8 +28,8 @@ impl PositionsMonitor {
     }
 
     fn remove_from_instruments_map(&mut self, position: &Position) {
-        for invest_instrument in position.get_order().get_instruments() {
-            if let Some(ids) = self.ids_by_instruments.get_mut(&invest_instrument) {
+        for instrument in position.get_instruments() {
+            if let Some(ids) = self.ids_by_instruments.get_mut(&instrument) {
                 ids.remove(position.get_id());
             }
         }
@@ -42,9 +42,9 @@ impl PositionsMonitor {
 
     fn add_to_instruments_map(&mut self, position: &Position) {
         let id = position.get_id().to_owned();
-        let invest_instruments = position.get_order().get_instruments();
+        let instruments = position.get_instruments();
 
-        for invest_instrument in invest_instruments {
+        for invest_instrument in instruments {
             if let Some(ids) = self.ids_by_instruments.get_mut(&invest_instrument) {
                 ids.insert(id.clone());
             } else {

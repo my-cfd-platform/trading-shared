@@ -86,6 +86,7 @@ pub enum AutoClosePositionUnit {
 }
 
 impl Order {
+    /// returns vec of instruments invested by order
     pub fn get_invest_instruments(&self) -> Vec<String> {
         let mut instruments = Vec::with_capacity(self.invest_assets.len());
 
@@ -97,6 +98,7 @@ impl Order {
         instruments
     }
 
+    /// returns vec of all possible instruments
     pub fn get_instruments(&self) -> Vec<String> {
         let mut instruments = Vec::with_capacity(self.invest_assets.len() + 1);
         instruments.push(self.instrument.clone());
