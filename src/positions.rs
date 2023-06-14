@@ -1,7 +1,7 @@
 use crate::calculations::calculate_percent;
 use crate::top_ups::TopUp;
 use crate::{
-    calculations::{calculate_total_amount},
+    calculations::calculate_total_amount,
     orders::{Order, OrderSide, StopLossConfig, TakeProfitConfig},
 };
 use num_enum::{IntoPrimitive, TryFromPrimitive};
@@ -273,13 +273,17 @@ impl ActivePosition {
     pub fn update(&mut self, bidask: &BidAsk) {
         self.try_update_price(bidask);
         self.try_update_asset_price(bidask);
-        let invest_amount = self
+
+        let order_invest_amount = self
             .order
             .calculate_invest_amount(&self.current_asset_prices);
-        let top_ups_amount = self.calculate_top_ups_amount(&self.current_asset_prices);
-        self.current_pnl = self.calculate_pnl(invest_amount + top_ups_amount, self.activate_price);
+        let top_ups_amount = self.calculate_active_top_ups_amount(&self.current_asset_prices);
+        self.current_pnl =
+            self.calculate_total_pnl(order_invest_amount + top_ups_amount, self.activate_price);
+
         if self.current_pnl < 0.0 {
-            self.current_loss_percent = calculate_percent(invest_amount, self.current_pnl.abs());
+            self.current_loss_percent =
+                calculate_percent(order_invest_amount, self.current_pnl.abs());
         } else {
             self.current_loss_percent = 0.0;
         }
@@ -309,7 +313,7 @@ impl ActivePosition {
     }
 
     pub fn close(self, reason: ClosePositionReason) -> ClosedPosition {
-        let asset_pnls = self.calculate_asset_pnls();
+        let asset_pnls = self.calculate_total_asset_pnls();
         let pnl = calculate_total_amount(&asset_pnls, &self.current_asset_prices);
 
         ClosedPosition {
@@ -387,7 +391,7 @@ impl ActivePosition {
     }
 
     /// Calculates total asset amounts invested to position. Including order and all active top-ups
-    pub fn calculate_asset_amounts(&self) -> HashMap<String, f64> {
+    pub fn calculate_total_asset_amounts(&self) -> HashMap<String, f64> {
         let mut amounts = HashMap::with_capacity(self.order.invest_assets.len() + 5);
 
         for (asset, amount) in self.order.invest_assets.iter() {
@@ -413,24 +417,20 @@ impl ActivePosition {
         amounts
     }
 
-    /// Calculates asset amounts for next top-up
-    pub fn calculate_next_top_up_amounts(&self) -> HashMap<String, f64> {
+    /// Calculates amount for next top-up in base asset
+    pub fn calculate_required_top_up_amount(&self) -> f64 {
         if !self.is_top_up() {
-            return HashMap::with_capacity(0)
+            panic!("Position top-up is not possible")
         }
 
-        let asset_amounts = self.calculate_asset_amounts();
-        let mut top_up_amounts = HashMap::with_capacity(self.order.invest_assets.len() + 5);
+        let asset_amounts = self.calculate_total_asset_amounts();
+        let total_amount = calculate_total_amount(&asset_amounts, &self.current_asset_prices);
 
-        for (asset, amount) in asset_amounts.into_iter() {
-            top_up_amounts.insert(asset, amount * self.order.top_up_percent);
-        }
-
-        top_up_amounts
+        total_amount * self.order.top_up_percent
     }
 
     /// Calculates total top-up amount in base asset by position
-    pub fn calculate_top_ups_amount(&self, asset_prices: &HashMap<String, f64>) -> f64 {
+    pub fn calculate_active_top_ups_amount(&self, asset_prices: &HashMap<String, f64>) -> f64 {
         let mut top_ups_amount = 0.0;
 
         for top_up in self.top_ups.iter() {
@@ -441,7 +441,7 @@ impl ActivePosition {
     }
 
     /// Calculates total pnl in base asset by position
-    fn calculate_pnl(&self, invest_amount: f64, initial_price: f64) -> f64 {
+    fn calculate_total_pnl(&self, invest_amount: f64, initial_price: f64) -> f64 {
         let volume = self.order.calculate_volume(invest_amount);
 
         match self.order.side {
@@ -451,10 +451,10 @@ impl ActivePosition {
     }
 
     /// Calculates pnl by all invested assets, includes order, and top-ups
-    pub fn calculate_asset_pnls(&self) -> HashMap<String, f64> {
+    pub fn calculate_total_asset_pnls(&self) -> HashMap<String, f64> {
         let mut asset_pnls = HashMap::new();
 
-        for (asset, amount) in self.calculate_invest_pnls().into_iter() {
+        for (asset, amount) in self.calculate_order_assets_pnls().into_iter() {
             let asset_pnl = asset_pnls.get_mut(&asset);
 
             if let Some(asset_pnl) = asset_pnl {
@@ -464,7 +464,7 @@ impl ActivePosition {
             }
         }
 
-        for (asset, amount) in self.calculate_top_ups_pnls().into_iter() {
+        for (asset, amount) in self.calculate_top_ups_assets_pnls().into_iter() {
             let asset_pnl = asset_pnls.get_mut(&asset);
 
             if let Some(asset_pnl) = asset_pnl {
@@ -478,11 +478,11 @@ impl ActivePosition {
     }
 
     /// Calculates pnl by invested assets initially in order
-    pub fn calculate_invest_pnls(&self) -> HashMap<String, f64> {
+    pub fn calculate_order_assets_pnls(&self) -> HashMap<String, f64> {
         let mut pnls_by_assets = HashMap::with_capacity(self.order.invest_assets.len());
 
         for (asset, amount) in self.order.invest_assets.iter() {
-            let pnl = self.calculate_pnl(*amount, self.activate_price);
+            let pnl = self.calculate_total_pnl(*amount, self.activate_price);
             let max_loss_amount = amount * -1.0; // limit for isolated trade
 
             if pnl < max_loss_amount {
@@ -496,12 +496,12 @@ impl ActivePosition {
     }
 
     /// Calculates pnl by invested assets in top-ups
-    pub fn calculate_top_ups_pnls(&self) -> HashMap<String, f64> {
+    pub fn calculate_top_ups_assets_pnls(&self) -> HashMap<String, f64> {
         let mut pnls_by_assets = HashMap::new();
 
         for top_up in self.top_ups.iter() {
             for (asset, amount) in top_up.assets.iter() {
-                let pnl = self.calculate_pnl(*amount, top_up.instrument_price);
+                let pnl = self.calculate_total_pnl(*amount, top_up.instrument_price);
                 let max_loss_amount = amount * -1.0; // limit for isolated trade
                 let pnl = if pnl < max_loss_amount {
                     max_loss_amount
