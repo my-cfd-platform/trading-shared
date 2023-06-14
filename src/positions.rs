@@ -375,7 +375,7 @@ impl ActivePosition {
     }
 
     pub fn is_margin_call(&self) -> bool {
-        self.current_loss_percent >= self.order.margin_call_percent
+        !self.order.top_up_enabled && self.current_loss_percent >= self.order.margin_call_percent
     }
 
     pub fn is_top_up(&self) -> bool {
