@@ -71,7 +71,7 @@ impl PositionsMonitor {
             let position = self.positions_cache.get_mut(id);
 
             let Some(position) = position else {
-                return false;
+                return false; // no position in cache so remove id
             };
 
             match position {
@@ -82,7 +82,7 @@ impl PositionsMonitor {
                     };
                     events.push(PositionMonitoringEvent::PositionClosed(position));
 
-                    false
+                    false // remove closed position
                 }
                 Position::Pending(position) => {
                     position.update(bidask);
@@ -98,7 +98,7 @@ impl PositionsMonitor {
                         self.positions_cache.add(Position::Active(position));
                     }
 
-                    true
+                    true // active position must be monitored
                 }
                 Position::Active(position) => {
                     position.update(bidask);
@@ -109,20 +109,26 @@ impl PositionsMonitor {
 
                     if position.is_top_up() {
                         events.push(PositionMonitoringEvent::PositionTopUp(position.clone()));
+                        match self.positions_cache.remove(id).expect("Must exists") {
+                            Position::Active(position) => position,
+                            _ => panic!("Position is in Active case"),
+                        };
+
+                        return false; // top-up required for position
                     }
 
                     if let Some(reason) = position.determine_close_reason() {
                         let position =
                             match self.positions_cache.remove(id).expect("Must exists") {
                                 Position::Active(position) => position,
-                                _ => panic!("Checked"),
+                                _ => panic!("Position is in Active case"),
                             };
                         let position = position.close(reason);
                         events.push(PositionMonitoringEvent::PositionClosed(position));
 
-                        false
+                        false // remove closed position
                     } else {
-                        true
+                        true // no need to do anything with position
                     }
                 }
             }
