@@ -365,6 +365,7 @@ impl ActivePosition {
             order: self.order,
             id: self.id,
             top_ups: self.top_ups,
+            total_asset_amounts: self.calculate_total_asset_amounts()
         }
     }
 
@@ -572,6 +573,7 @@ pub struct ClosedPosition {
     pub pnl: Option<f64>,
     pub asset_pnls: HashMap<String, f64>,
     pub top_ups: Vec<TopUp>,
+    pub total_asset_amounts: HashMap<String, f64>
 }
 
 impl ClosedPosition {
