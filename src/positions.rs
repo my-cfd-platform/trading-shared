@@ -271,9 +271,10 @@ impl PendingPosition {
             close_price: self.current_price,
             close_reason: reason,
             close_asset_prices: self.current_asset_prices.to_owned(),
-            order: self.order,
             id: self.id,
             top_ups: Vec::with_capacity(0),
+            total_asset_amounts: self.order.invest_assets.clone(),
+            order: self.order,
         }
     }
 }
@@ -351,6 +352,7 @@ impl ActivePosition {
         let pnl = calculate_total_amount(&asset_pnls, &self.current_asset_prices);
 
         ClosedPosition {
+            total_asset_amounts: self.calculate_total_asset_amounts(),
             pnl: Some(pnl),
             asset_pnls,
             open_date: self.open_date,
@@ -365,7 +367,6 @@ impl ActivePosition {
             order: self.order,
             id: self.id,
             top_ups: self.top_ups,
-            total_asset_amounts: self.calculate_total_asset_amounts()
         }
     }
 
