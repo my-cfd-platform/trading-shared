@@ -273,7 +273,7 @@ impl PendingPosition {
             close_asset_prices: self.current_asset_prices.to_owned(),
             id: self.id,
             top_ups: Vec::with_capacity(0),
-            total_asset_amounts: self.order.invest_assets.clone(),
+            total_invest_assets: self.order.invest_assets.clone(),
             order: self.order,
         }
     }
@@ -352,7 +352,7 @@ impl ActivePosition {
         let pnl = calculate_total_amount(&asset_pnls, &self.current_asset_prices);
 
         ClosedPosition {
-            total_asset_amounts: self.calculate_total_asset_amounts(),
+            total_invest_assets: self.calculate_total_invest_assets(),
             pnl: Some(pnl),
             asset_pnls,
             open_date: self.open_date,
@@ -427,7 +427,7 @@ impl ActivePosition {
     }
 
     /// Calculates total asset amounts invested to position. Including order and all active top-ups
-    pub fn calculate_total_asset_amounts(&self) -> HashMap<String, f64> {
+    pub fn calculate_total_invest_assets(&self) -> HashMap<String, f64> {
         let mut amounts = HashMap::with_capacity(self.order.invest_assets.len() + 5);
 
         for (asset, amount) in self.order.invest_assets.iter() {
@@ -459,7 +459,7 @@ impl ActivePosition {
             panic!("Position top-up is not possible")
         }
 
-        let asset_amounts = self.calculate_total_asset_amounts();
+        let asset_amounts = self.calculate_total_invest_assets();
         let total_amount = calculate_total_amount(&asset_amounts, &self.current_asset_prices);
 
         total_amount * self.order.top_up_percent
@@ -574,7 +574,7 @@ pub struct ClosedPosition {
     pub pnl: Option<f64>,
     pub asset_pnls: HashMap<String, f64>,
     pub top_ups: Vec<TopUp>,
-    pub total_asset_amounts: HashMap<String, f64>
+    pub total_invest_assets: HashMap<String, f64>
 }
 
 impl ClosedPosition {
