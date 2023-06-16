@@ -243,6 +243,7 @@ impl PendingPosition {
             top_ups: Vec::new(),
             current_pnl: 0.0,
             current_loss_percent: 0.0,
+            prev_loss_percent: 0.0,
         }
     }
 
@@ -294,6 +295,7 @@ pub struct ActivePosition {
     pub top_ups: Vec<TopUp>,
     pub current_pnl: f64,
     pub current_loss_percent: f64,
+    pub prev_loss_percent: f64,
 }
 
 impl ActivePosition {
@@ -315,6 +317,7 @@ impl ActivePosition {
         let top_ups_amount = self.calculate_active_top_ups_amount(&self.current_asset_prices);
         self.current_pnl =
             self.calculate_total_pnl(order_invest_amount + top_ups_amount, self.activate_price);
+        self.prev_loss_percent = self.current_loss_percent;
 
         if self.current_pnl < 0.0 {
             self.current_loss_percent =
@@ -415,7 +418,11 @@ impl ActivePosition {
     }
 
     pub fn is_margin_call(&self) -> bool {
-        !self.order.top_up_enabled && self.current_loss_percent >= self.order.margin_call_percent
+        if !self.order.top_up_enabled {
+            return false;
+        }
+
+         self.current_loss_percent >= self.order.margin_call_percent && self.prev_loss_percent < self.order.margin_call_percent
     }
 
     pub fn is_top_up(&self) -> bool {
@@ -719,6 +726,7 @@ mod tests {
             top_ups: Vec::new(),
             current_pnl: 0.0,
             current_loss_percent: 0.0,
+            prev_loss_percent: 0.0,
         }
     }
 }
