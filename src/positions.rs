@@ -334,7 +334,7 @@ impl ActivePosition {
     }
 
     fn try_update_asset_price(&mut self, bidask: &BidAsk) {
-        for asset in self.order.invest_assets.keys() {
+        for asset in self.calculate_total_invest_assets().keys() {
             let id = BidAsk::generate_id(asset, &self.order.base_asset);
 
             if id == bidask.instrument {
