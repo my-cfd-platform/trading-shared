@@ -137,7 +137,7 @@ impl Order {
     }
 
     pub fn open(self, bidask: &BidAsk, asset_prices: &HashMap<String, f64>) -> Position {
-        if let Err(_) = self.validate_prices(asset_prices) {
+        if self.validate_prices(asset_prices).is_err() {
             panic!("Can't open order: invalid prices");
         }
 
@@ -145,16 +145,14 @@ impl Order {
             panic!("Can't open order: leverage can't be less or equals zero");
         }
 
-        let position = match self.get_type() {
+        match self.get_type() {
             OrderType::Market => Position::Active(self.into_active(bidask, asset_prices)),
             OrderType::Limit => {
                 let pending_position = self.into_pending(bidask, asset_prices);
 
                 pending_position.try_activate()
             }
-        };
-
-        position
+        }
     }
 
     pub fn calculate_volume(&self, invest_amount: f64) -> f64 {
