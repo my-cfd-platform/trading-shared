@@ -4,10 +4,10 @@ use crate::{
     calculations::calculate_total_amount,
     orders::{Order, OrderSide, StopLossConfig, TakeProfitConfig},
 };
+use ahash::{HashSet, HashSetExt};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 use std::collections::HashMap;
-use ahash::{HashSet, HashSetExt};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, IntoPrimitive, TryFromPrimitive)]
@@ -130,14 +130,14 @@ impl Position {
                 instruments.extend(order_instruments.into_iter());
 
                 instruments
-            },
+            }
             Position::Closed(position) => {
                 let order_instruments = position.order.get_instruments();
                 let mut instruments = self.get_top_up_instruments(&position.top_ups);
                 instruments.extend(order_instruments.into_iter());
 
                 instruments
-            },
+            }
         }
     }
 
@@ -422,7 +422,8 @@ impl ActivePosition {
             return false;
         }
 
-         self.current_loss_percent >= self.order.margin_call_percent && self.prev_loss_percent < self.order.margin_call_percent
+        self.current_loss_percent >= self.order.margin_call_percent
+            && self.prev_loss_percent < self.order.margin_call_percent
     }
 
     pub fn is_top_up(&self) -> bool {
@@ -581,7 +582,7 @@ pub struct ClosedPosition {
     pub pnl: Option<f64>,
     pub asset_pnls: HashMap<String, f64>,
     pub top_ups: Vec<TopUp>,
-    pub total_invest_assets: HashMap<String, f64>
+    pub total_invest_assets: HashMap<String, f64>,
 }
 
 impl ClosedPosition {
