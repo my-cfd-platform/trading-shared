@@ -1,3 +1,4 @@
+use crate::top_ups::TopUp;
 use crate::{
     caches::PositionsCache,
     positions::{ActivePosition, BidAsk, ClosedPosition, Position},
@@ -74,7 +75,7 @@ impl PositionsMonitor {
                 return false; // no position in cache so remove id
             };
 
-            match position {
+            let is_retain = match position {
                 Position::Closed(_) => {
                     let position = match self.positions_cache.remove(id).expect("Checked") {
                         Position::Closed(position) => position,
@@ -93,8 +94,7 @@ impl PositionsMonitor {
                             _ => panic!("Checked"),
                         };
                         let position = position.into_active();
-                        events
-                            .push(PositionMonitoringEvent::PositionActivated(position.clone()));
+                        events.push(PositionMonitoringEvent::PositionActivated(position.clone()));
                         self.positions_cache.add(Position::Active(position));
                     }
 
@@ -104,25 +104,42 @@ impl PositionsMonitor {
                     position.update(bidask);
 
                     if position.is_margin_call() {
-                        events.push(PositionMonitoringEvent::PositionMarginCall(position.clone()));
+                        events.push(PositionMonitoringEvent::PositionMarginCall(
+                            position.clone(),
+                        ));
                     }
 
                     if position.is_top_up() {
-                        events.push(PositionMonitoringEvent::PositionTopUp(position.clone()));
-                        match self.positions_cache.remove(id).expect("Must exists") {
+                        let position = match self.positions_cache.remove(id).expect("Must exists") {
                             Position::Active(position) => position,
                             _ => panic!("Position is in Active case"),
                         };
+                        events.push(PositionMonitoringEvent::PositionTopUp(position));
 
                         return false; // top-up required for position
+                    } else {
+                        let canceled_top_ups = position.try_cancel_top_ups();
+
+                        if !canceled_top_ups.is_empty() {
+                            let position =
+                                match self.positions_cache.remove(id).expect("Must exists") {
+                                    Position::Active(position) => position,
+                                    _ => panic!("Position is in Active case"),
+                                };
+                            events.push(PositionMonitoringEvent::PositionTopUpCanceled((
+                                position,
+                                canceled_top_ups,
+                            )));
+
+                            return false; // top-up cancel required for position
+                        }
                     }
 
                     if let Some(reason) = position.determine_close_reason() {
-                        let position =
-                            match self.positions_cache.remove(id).expect("Must exists") {
-                                Position::Active(position) => position,
-                                _ => panic!("Position is in Active case"),
-                            };
+                        let position = match self.positions_cache.remove(id).expect("Must exists") {
+                            Position::Active(position) => position,
+                            _ => panic!("Position is in Active case"),
+                        };
                         let position = position.close(reason);
                         events.push(PositionMonitoringEvent::PositionClosed(position));
 
@@ -131,7 +148,9 @@ impl PositionsMonitor {
                         true // no need to do anything with position
                     }
                 }
-            }
+            };
+
+            is_retain
         });
 
         events
@@ -143,6 +162,7 @@ pub enum PositionMonitoringEvent {
     PositionActivated(ActivePosition),
     PositionMarginCall(ActivePosition),
     PositionTopUp(ActivePosition),
+    PositionTopUpCanceled((ActivePosition, Vec<TopUp>)),
 }
 
 #[cfg(test)]

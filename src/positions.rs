@@ -327,6 +327,24 @@ impl ActivePosition {
         }
     }
 
+    pub fn try_cancel_top_ups(&mut self) -> Vec<TopUp> {
+        let mut canceled_top_ups = Vec::with_capacity(self.top_ups.len());
+
+        self.top_ups.retain(|t| {
+            if (self.order.side == OrderSide::Buy && t.instrument_price >= self.current_price)
+                || (self.order.side == OrderSide::Sell && t.instrument_price <= self.current_price)
+            {
+                canceled_top_ups.push(t.to_owned());
+
+                return false;
+            }
+
+            true
+        });
+
+        canceled_top_ups
+    }
+
     fn try_update_price(&mut self, bidask: &BidAsk) {
         if self.order.instrument == bidask.instrument {
             self.current_price = bidask.get_close_price(&self.order.side)
