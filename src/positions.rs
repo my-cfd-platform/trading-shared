@@ -328,7 +328,7 @@ impl ActivePosition {
     }
 
     pub fn try_cancel_top_ups(&mut self) -> Vec<TopUp> {
-        let mut canceled_top_ups = Vec::with_capacity(self.top_ups.len());
+        let mut canceled_top_ups = Vec::with_capacity(self.top_ups.len() / 2);
 
         self.top_ups.retain(|t| {
             if (self.order.side == OrderSide::Buy && t.instrument_price >= self.current_price)
