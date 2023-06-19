@@ -60,24 +60,24 @@ impl PositionsMonitor {
     }
 
     pub fn update(&mut self, bidask: &BidAsk) -> Vec<PositionMonitoringEvent> {
-        let ids = self.ids_by_instruments.get_mut(&bidask.instrument);
+        let position_ids = self.ids_by_instruments.get_mut(&bidask.instrument);
 
-        let Some(ids) = ids else {
+        let Some(position_ids) = position_ids else {
             return Vec::with_capacity(0);
         };
 
-        let mut events = Vec::with_capacity(ids.len());
+        let mut events = Vec::with_capacity(position_ids.len());
 
-        ids.retain(|id| {
-            let position = self.positions_cache.get_mut(id);
+        position_ids.retain(|position_id| {
+            let position = self.positions_cache.get_mut(position_id);
 
             let Some(position) = position else {
-                return false; // no position in cache so remove id
+                return false; // no position in cache so remove id from instruments map
             };
 
             match position {
                 Position::Closed(_) => {
-                    let position = match self.positions_cache.remove(id).expect("Checked") {
+                    let position = match self.positions_cache.remove(position_id).expect("Checked") {
                         Position::Closed(position) => position,
                         _ => panic!("Checked"),
                     };
@@ -89,7 +89,7 @@ impl PositionsMonitor {
                     position.update(bidask);
 
                     if position.can_activate() {
-                        let position = match self.positions_cache.remove(id).expect("Checked") {
+                        let position = match self.positions_cache.remove(position_id).expect("Checked") {
                             Position::Pending(position) => position,
                             _ => panic!("Checked"),
                         };
@@ -110,7 +110,7 @@ impl PositionsMonitor {
 
                     if position.is_top_up() {
                         let position =
-                            match self.positions_cache.remove(id).expect("Must exists") {
+                            match self.positions_cache.remove(position_id).expect("Must exists") {
                                 Position::Active(position) => position,
                                 _ => panic!("Position is in Active case"),
                             };
@@ -122,7 +122,7 @@ impl PositionsMonitor {
 
                         if !canceled_top_ups.is_empty() {
                             let position =
-                                match self.positions_cache.remove(id).expect("Must exists") {
+                                match self.positions_cache.remove(position_id).expect("Must exists") {
                                     Position::Active(position) => position,
                                     _ => panic!("Position is in Active case"),
                                 };
@@ -134,7 +134,7 @@ impl PositionsMonitor {
 
                     if let Some(reason) = position.determine_close_reason() {
                         let position =
-                            match self.positions_cache.remove(id).expect("Must exists") {
+                            match self.positions_cache.remove(position_id).expect("Must exists") {
                                 Position::Active(position) => position,
                                 _ => panic!("Position is in Active case"),
                             };
