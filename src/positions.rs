@@ -8,6 +8,7 @@ use ahash::{HashSet, HashSetExt};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 use std::collections::HashMap;
+use std::time::Duration;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, IntoPrimitive, TryFromPrimitive)]
@@ -327,10 +328,17 @@ impl ActivePosition {
         }
     }
 
-    pub fn try_cancel_top_ups(&mut self) -> Vec<TopUp> {
+    pub fn try_cancel_top_ups(&mut self, delay: Duration) -> Vec<TopUp> {
         let mut canceled_top_ups = Vec::with_capacity(self.top_ups.len() / 2);
 
         self.top_ups.retain(|t| {
+            let mut delay_start_date = DateTimeAsMicroseconds::now();
+            delay_start_date.sub(delay);
+
+            if t.date.is_later_than(delay_start_date) {
+                return true;
+            }
+
             if (self.order.side == OrderSide::Buy && t.instrument_price >= self.current_price)
                 || (self.order.side == OrderSide::Sell && t.instrument_price <= self.current_price)
             {

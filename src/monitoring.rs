@@ -1,3 +1,4 @@
+use std::time::Duration;
 use crate::{
     caches::PositionsCache,
     positions::{ActivePosition, BidAsk, ClosedPosition, Position},
@@ -8,13 +9,15 @@ use crate::top_ups::TopUp;
 pub struct PositionsMonitor {
     positions_cache: PositionsCache,
     ids_by_instruments: AHashMap<String, AHashSet<String>>,
+    cancel_top_up_delay: Duration
 }
 
 impl PositionsMonitor {
-    pub fn with_capacity(capacity: usize) -> Self {
+    pub fn with_capacity(capacity: usize, cancel_top_up_delay: Duration) -> Self {
         Self {
             positions_cache: PositionsCache::with_capacity(capacity),
             ids_by_instruments: AHashMap::with_capacity(capacity),
+            cancel_top_up_delay,
         }
     }
 
@@ -118,7 +121,7 @@ impl PositionsMonitor {
 
                         return false; // top-up required for position
                     } else {
-                        let canceled_top_ups = position.try_cancel_top_ups();
+                        let canceled_top_ups = position.try_cancel_top_ups(self.cancel_top_up_delay);
 
                         if !canceled_top_ups.is_empty() {
                             let position =
