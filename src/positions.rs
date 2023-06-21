@@ -309,7 +309,7 @@ impl ActivePosition {
     }
 
     pub fn update(&mut self, bidask: &BidAsk) {
-        self.try_update_price(bidask);
+        self.try_update_instrument_price(bidask);
         self.try_update_asset_price(bidask);
 
         let order_invest_amount = self
@@ -353,7 +353,7 @@ impl ActivePosition {
         canceled_top_ups
     }
 
-    fn try_update_price(&mut self, bidask: &BidAsk) {
+    fn try_update_instrument_price(&mut self, bidask: &BidAsk) {
         if self.order.instrument == bidask.instrument {
             self.current_price = bidask.get_close_price(&self.order.side)
         }
