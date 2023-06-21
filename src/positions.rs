@@ -178,8 +178,8 @@ pub struct PendingPosition {
 
 impl PendingPosition {
     pub fn update(&mut self, bidask: &BidAsk) {
-        self.try_update_price(bidask);
-        self.try_update_asset_price(bidask);
+        self.try_update_instrument_price(bidask);
+        self.try_update_asset_prices(bidask);
         self.last_update_date = DateTimeAsMicroseconds::now();
     }
 
@@ -192,13 +192,13 @@ impl PendingPosition {
             || self.current_price <= desired_price && self.order.side == OrderSide::Buy
     }
 
-    fn try_update_price(&mut self, bidask: &BidAsk) {
+    fn try_update_instrument_price(&mut self, bidask: &BidAsk) {
         if self.order.instrument == bidask.instrument {
             self.current_price = bidask.get_open_price(&self.order.side)
         }
     }
 
-    fn try_update_asset_price(&mut self, bidask: &BidAsk) {
+    fn try_update_asset_prices(&mut self, bidask: &BidAsk) {
         for asset in self.order.invest_assets.keys() {
             let id = BidAsk::generate_id(asset, &self.order.base_asset);
 
