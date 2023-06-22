@@ -496,7 +496,7 @@ impl ActivePosition {
         let asset_amounts = self.calculate_total_invest_assets();
         let total_amount = calculate_total_amount(&asset_amounts, &self.current_asset_prices);
 
-        total_amount * self.order.top_up_percent
+        total_amount * self.order.top_up_percent / 100.0
     }
 
     /// Calculates total top-up amount in base asset by position
