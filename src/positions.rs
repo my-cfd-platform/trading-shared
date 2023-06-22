@@ -1,5 +1,5 @@
 use crate::calculations::calculate_percent;
-use crate::top_ups::TopUp;
+use crate::top_ups::{ActiveTopUp, CanceledTopUp};
 use crate::{
     calculations::calculate_total_amount,
     orders::{Order, OrderSide, StopLossConfig, TakeProfitConfig},
@@ -142,7 +142,7 @@ impl Position {
         }
     }
 
-    fn get_top_up_instruments(&self, top_ups: &Vec<TopUp>) -> HashSet<String> {
+    fn get_top_up_instruments(&self, top_ups: &Vec<ActiveTopUp>) -> HashSet<String> {
         let mut instruments = HashSet::new();
 
         for top_up in top_ups {
@@ -293,7 +293,7 @@ pub struct ActivePosition {
     pub current_price: f64,
     pub current_asset_prices: HashMap<String, f64>,
     pub last_update_date: DateTimeAsMicroseconds,
-    pub top_ups: Vec<TopUp>,
+    pub top_ups: Vec<ActiveTopUp>,
     pub current_pnl: f64,
     pub current_loss_percent: f64,
     pub prev_loss_percent: f64,
@@ -314,7 +314,7 @@ impl ActivePosition {
         self.update_pnl();
     }
 
-    pub fn try_cancel_top_ups(&mut self, delay: Duration) -> Vec<TopUp> {
+    pub fn try_cancel_top_ups(&mut self, delay: Duration) -> Vec<CanceledTopUp> {
         let mut canceled_top_ups = Vec::with_capacity(self.top_ups.len() / 2);
 
         self.top_ups.retain(|t| {
@@ -328,7 +328,15 @@ impl ActivePosition {
             if (self.order.side == OrderSide::Buy && t.instrument_price >= self.current_price)
                 || (self.order.side == OrderSide::Sell && t.instrument_price <= self.current_price)
             {
-                canceled_top_ups.push(t.to_owned());
+                canceled_top_ups.push(CanceledTopUp {
+                    id: t.id.clone(),
+                    date: t.date,
+                    assets: t.assets.clone(),
+                    instrument_price: 0.0,
+                    asset_prices: t.asset_prices.clone(),
+                    cancel_instrument_price: self.current_price,
+                    cancel_date: DateTimeAsMicroseconds::now(),
+                });
 
                 return false;
             }
@@ -581,7 +589,7 @@ impl ActivePosition {
         pnls_by_assets
     }
 
-    pub fn add_top_up(&mut self, top_up: TopUp) {
+    pub fn add_top_up(&mut self, top_up: ActiveTopUp) {
         self.top_ups.push(top_up);
         self.update_pnl();
     }
@@ -619,7 +627,7 @@ pub struct ClosedPosition {
     pub close_asset_prices: HashMap<String, f64>,
     pub pnl: Option<f64>,
     pub asset_pnls: HashMap<String, f64>,
-    pub top_ups: Vec<TopUp>,
+    pub top_ups: Vec<ActiveTopUp>,
     pub total_invest_assets: HashMap<String, f64>,
 }
 

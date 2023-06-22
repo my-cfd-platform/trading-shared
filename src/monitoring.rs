@@ -4,7 +4,7 @@ use crate::{
     positions::{ActivePosition, BidAsk, ClosedPosition, Position},
 };
 use ahash::{AHashMap, AHashSet};
-use crate::top_ups::TopUp;
+use crate::top_ups::{CanceledTopUp};
 
 pub struct PositionsMonitor {
     positions_cache: PositionsCache,
@@ -161,7 +161,7 @@ pub enum PositionMonitoringEvent {
     PositionActivated(ActivePosition),
     PositionMarginCall(ActivePosition),
     PositionTopUp(ActivePosition),
-    PositionTopUpCanceled((ActivePosition, Vec<TopUp>)),
+    PositionTopUpCanceled((ActivePosition, Vec<CanceledTopUp>)),
 }
 
 #[cfg(test)]
