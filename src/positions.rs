@@ -332,7 +332,7 @@ impl ActivePosition {
                     id: t.id.clone(),
                     date: t.date,
                     assets: t.assets.clone(),
-                    instrument_price: 0.0,
+                    instrument_price: t.instrument_price,
                     asset_prices: t.asset_prices.clone(),
                     cancel_instrument_price: self.current_price,
                     cancel_date: DateTimeAsMicroseconds::now(),
