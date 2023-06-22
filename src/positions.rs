@@ -336,6 +336,10 @@ impl ActivePosition {
             true
         });
 
+        if !canceled_top_ups.is_empty() {
+            self.update_pnl();
+        }
+
         canceled_top_ups
     }
 
