@@ -311,21 +311,7 @@ impl ActivePosition {
     pub fn update(&mut self, bidask: &BidAsk) {
         self.try_update_instrument_price(bidask);
         self.try_update_asset_price(bidask);
-
-        let order_invest_amount = self
-            .order
-            .calculate_invest_amount(&self.current_asset_prices);
-        let top_ups_amount = self.calculate_active_top_ups_amount(&self.current_asset_prices);
-        self.current_pnl =
-            self.calculate_total_pnl(order_invest_amount + top_ups_amount, self.activate_price);
-        self.prev_loss_percent = self.current_loss_percent;
-
-        if self.current_pnl < 0.0 {
-            self.current_loss_percent =
-                calculate_percent(order_invest_amount + top_ups_amount, self.current_pnl.abs());
-        } else {
-            self.current_loss_percent = 0.0;
-        }
+        self.update_pnl();
     }
 
     pub fn try_cancel_top_ups(&mut self, delay: Duration) -> Vec<TopUp> {
@@ -589,6 +575,28 @@ impl ActivePosition {
         }
 
         pnls_by_assets
+    }
+
+    pub fn add_top_up(&mut self, top_up: TopUp) {
+        self.top_ups.push(top_up);
+        self.update_pnl();
+    }
+
+    fn update_pnl(&mut self) {
+        let order_invest_amount = self
+            .order
+            .calculate_invest_amount(&self.current_asset_prices);
+        let top_ups_amount = self.calculate_active_top_ups_amount(&self.current_asset_prices);
+        self.current_pnl =
+            self.calculate_total_pnl(order_invest_amount + top_ups_amount, self.activate_price);
+        self.prev_loss_percent = self.current_loss_percent;
+
+        if self.current_pnl < 0.0 {
+            self.current_loss_percent =
+                calculate_percent(order_invest_amount + top_ups_amount, self.current_pnl.abs());
+        } else {
+            self.current_loss_percent = 0.0;
+        }
     }
 }
 
