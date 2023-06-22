@@ -444,7 +444,7 @@ impl ActivePosition {
     }
 
     pub fn is_margin_call(&self) -> bool {
-        if !self.order.top_up_enabled {
+        if self.order.top_up_enabled {
             return false;
         }
 
