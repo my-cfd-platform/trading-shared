@@ -322,7 +322,7 @@ impl ActivePosition {
 
         if self.current_pnl < 0.0 {
             self.current_loss_percent =
-                calculate_percent(order_invest_amount, self.current_pnl.abs());
+                calculate_percent(order_invest_amount + top_ups_amount, self.current_pnl.abs());
         } else {
             self.current_loss_percent = 0.0;
         }
