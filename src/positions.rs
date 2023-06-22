@@ -497,7 +497,7 @@ impl ActivePosition {
     }
 
     /// Calculates total pnl in base asset by position
-    fn calculate_total_pnl(&self, invest_amount: f64, initial_price: f64) -> f64 {
+    fn calculate_pnl(&self, invest_amount: f64, initial_price: f64) -> f64 {
         let volume = self.order.calculate_volume(invest_amount);
 
         match self.order.side {
@@ -538,7 +538,7 @@ impl ActivePosition {
         let mut pnls_by_assets = HashMap::with_capacity(self.order.invest_assets.len());
 
         for (asset, amount) in self.order.invest_assets.iter() {
-            let pnl = self.calculate_total_pnl(*amount, self.activate_price);
+            let pnl = self.calculate_pnl(*amount, self.activate_price);
             let max_loss_amount = amount * -1.0; // limit for isolated trade
 
             if pnl < max_loss_amount {
@@ -557,7 +557,7 @@ impl ActivePosition {
 
         for top_up in self.top_ups.iter() {
             for (asset, amount) in top_up.assets.iter() {
-                let pnl = self.calculate_total_pnl(*amount, top_up.instrument_price);
+                let pnl = self.calculate_pnl(*amount, top_up.instrument_price);
                 let max_loss_amount = amount * -1.0; // limit for isolated trade
                 let pnl = if pnl < max_loss_amount {
                     max_loss_amount
@@ -587,8 +587,8 @@ impl ActivePosition {
             .order
             .calculate_invest_amount(&self.current_asset_prices);
         let top_ups_amount = self.calculate_active_top_ups_amount(&self.current_asset_prices);
-        self.current_pnl =
-            self.calculate_total_pnl(order_invest_amount + top_ups_amount, self.activate_price);
+        let total_asset_pnls = self.calculate_total_asset_pnls();
+        self.current_pnl = calculate_total_amount(&total_asset_pnls, &self.current_asset_prices);
         self.prev_loss_percent = self.current_loss_percent;
 
         if self.current_pnl < 0.0 {
