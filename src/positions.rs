@@ -590,6 +590,10 @@ impl ActivePosition {
     }
 
     pub fn add_top_up(&mut self, top_up: ActiveTopUp) {
+        for (asset, price) in top_up.asset_prices.iter() {
+            self.current_asset_prices.insert(asset.to_owned(), price.to_owned());
+        }
+
         self.top_ups.push(top_up);
         self.update_pnl();
     }
