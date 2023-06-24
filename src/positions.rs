@@ -440,6 +440,10 @@ impl ActivePosition {
     }
 
     fn is_stop_out(&self) -> bool {
+        if self.is_top_up() {
+            return false;
+        }
+
         self.current_loss_percent >= self.order.stop_out_percent
     }
 
