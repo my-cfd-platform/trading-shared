@@ -181,6 +181,7 @@ impl Order {
             current_pnl: 0.0,
             current_loss_percent: 0.0,
             prev_loss_percent: 0.0,
+            top_up_locked: false,
         }
     }
 

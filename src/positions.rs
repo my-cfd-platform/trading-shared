@@ -245,6 +245,7 @@ impl PendingPosition {
             current_pnl: 0.0,
             current_loss_percent: 0.0,
             prev_loss_percent: 0.0,
+            top_up_locked: false,
         }
     }
 
@@ -297,6 +298,7 @@ pub struct ActivePosition {
     pub current_pnl: f64,
     pub current_loss_percent: f64,
     pub prev_loss_percent: f64,
+    pub top_up_locked: bool,
 }
 
 impl ActivePosition {
@@ -450,7 +452,15 @@ impl ActivePosition {
             && self.prev_loss_percent < self.order.margin_call_percent
     }
 
+    pub fn set_top_up_lock(&mut self, is_locked: bool) {
+        self.top_up_locked = is_locked;
+    }
+
     pub fn is_top_up(&self) -> bool {
+        if self.top_up_locked {
+            return false;
+        }
+
         if !self.order.top_up_enabled {
             return false;
         }
@@ -778,6 +788,7 @@ mod tests {
             current_pnl: 0.0,
             current_loss_percent: 0.0,
             prev_loss_percent: 0.0,
+            top_up_locked: false,
         }
     }
 }
