@@ -24,6 +24,10 @@ impl PositionsMonitor {
     }
 
     pub fn remove(&mut self, position_id: &str) -> Option<Position> {
+        if self.locked_ids.contains(position_id) {
+            return None;
+        }
+
         let position = self.positions_cache.remove(position_id);
 
         if let Some(position) = position.as_ref() {
