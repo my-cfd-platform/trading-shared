@@ -1,25 +1,31 @@
-use std::time::Duration;
+use crate::top_ups::CanceledTopUp;
 use crate::{
     caches::PositionsCache,
     positions::{ActivePosition, BidAsk, ClosedPosition, Position},
 };
 use ahash::{AHashMap, AHashSet};
-use crate::top_ups::{CanceledTopUp};
+use std::time::Duration;
 
 pub struct PositionsMonitor {
     positions_cache: PositionsCache,
     ids_by_instruments: AHashMap<String, AHashSet<String>>,
     cancel_top_up_delay: Duration,
+    cancel_top_up_price_change_percent: f64,
     locked_ids: AHashSet<String>,
 }
 
 impl PositionsMonitor {
-    pub fn with_capacity(capacity: usize, cancel_top_up_delay: Duration) -> Self {
+    pub fn with_capacity(
+        capacity: usize,
+        cancel_top_up_delay: Duration,
+        cancel_top_up_price_change_percent: f64,
+    ) -> Self {
         Self {
             positions_cache: PositionsCache::with_capacity(capacity),
             ids_by_instruments: AHashMap::with_capacity(capacity),
             cancel_top_up_delay,
             locked_ids: AHashSet::with_capacity(capacity),
+            cancel_top_up_price_change_percent,
         }
     }
 
@@ -88,7 +94,8 @@ impl PositionsMonitor {
         let mut events = Vec::with_capacity(position_ids.len());
 
         position_ids.retain(|position_id| {
-            if self.locked_ids.contains(position_id) { // skip update
+            if self.locked_ids.contains(position_id) {
+                // skip update
                 return true;
             }
 
@@ -100,7 +107,8 @@ impl PositionsMonitor {
 
             match position {
                 Position::Closed(_) => {
-                    let position = match self.positions_cache.remove(position_id).expect("Checked") {
+                    let position = match self.positions_cache.remove(position_id).expect("Checked")
+                    {
                         Position::Closed(position) => position,
                         _ => panic!("Checked"),
                     };
@@ -112,13 +120,13 @@ impl PositionsMonitor {
                     position.update(bidask);
 
                     if position.can_activate() {
-                        let position = match self.positions_cache.remove(position_id).expect("Checked") {
-                            Position::Pending(position) => position,
-                            _ => panic!("Checked"),
-                        };
+                        let position =
+                            match self.positions_cache.remove(position_id).expect("Checked") {
+                                Position::Pending(position) => position,
+                                _ => panic!("Checked"),
+                            };
                         let position = position.into_active();
-                        events
-                            .push(PositionMonitoringEvent::PositionActivated(position.clone()));
+                        events.push(PositionMonitoringEvent::PositionActivated(position.clone()));
                         self.positions_cache.add(Position::Active(position));
                     }
 
@@ -128,30 +136,43 @@ impl PositionsMonitor {
                     position.update(bidask);
 
                     if position.is_margin_call() {
-                        events.push(PositionMonitoringEvent::PositionMarginCall(position.clone()));
+                        events.push(PositionMonitoringEvent::PositionMarginCall(
+                            position.clone(),
+                        ));
                     }
 
                     if position.is_top_up() {
                         self.locked_ids.insert(position.id.clone());
-                        let event = PositionMonitoringEvent::PositionLocked(PositionLockReason::TopUp(position.to_owned()));
+                        let event = PositionMonitoringEvent::PositionLocked(
+                            PositionLockReason::TopUp(position.to_owned()),
+                        );
                         events.push(event);
                     } else {
-                        let canceled_top_ups = position.try_cancel_top_ups(self.cancel_top_up_delay);
+                        let canceled_top_up = position.try_cancel_top_up(
+                            self.cancel_top_up_price_change_percent,
+                            self.cancel_top_up_delay,
+                        );
 
-                        if !canceled_top_ups.is_empty() {
+                        if let Some(canceled_top_up) = canceled_top_up {
                             self.locked_ids.insert(position.id.clone());
-                            let reason = PositionLockReason::TopUpCanceled((position.to_owned(), canceled_top_ups));
+                            let reason = PositionLockReason::TopUpCanceled((
+                                position.to_owned(),
+                                canceled_top_up,
+                            ));
                             let event = PositionMonitoringEvent::PositionLocked(reason);
                             events.push(event);
                         }
                     }
 
                     if let Some(reason) = position.determine_close_reason() {
-                        let position =
-                            match self.positions_cache.remove(position_id).expect("Must exists") {
-                                Position::Active(position) => position,
-                                _ => panic!("Position is in Active case"),
-                            };
+                        let position = match self
+                            .positions_cache
+                            .remove(position_id)
+                            .expect("Must exists")
+                        {
+                            Position::Active(position) => position,
+                            _ => panic!("Position is in Active case"),
+                        };
                         let position = position.close(reason);
                         events.push(PositionMonitoringEvent::PositionClosed(position));
 
@@ -176,7 +197,7 @@ pub enum PositionMonitoringEvent {
 
 pub enum PositionLockReason {
     TopUp(ActivePosition),
-    TopUpCanceled((ActivePosition, Vec<CanceledTopUp>)),
+    TopUpCanceled((ActivePosition, CanceledTopUp)),
 }
 
 #[cfg(test)]

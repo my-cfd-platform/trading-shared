@@ -316,40 +316,41 @@ impl ActivePosition {
         self.update_pnl();
     }
 
-    pub fn try_cancel_top_ups(&mut self, delay: Duration) -> Vec<CanceledTopUp> {
-        let mut canceled_top_ups = Vec::with_capacity(self.top_ups.len() / 2);
+    pub fn try_cancel_top_up(
+        &mut self,
+        price_change_percent: f64,
+        delay: Duration,
+    ) -> Option<CanceledTopUp> {
+        let last_top_up = self.top_ups.last();
+
+        let Some(last_top_up) = last_top_up else {
+            return None;
+        };
+
         let mut delay_start_date = DateTimeAsMicroseconds::now();
         delay_start_date.sub(delay);
 
-        self.top_ups.retain(|t| {
-            if t.date.is_later_than(delay_start_date) {
-                return true;
-            }
-
-            if (self.order.side == OrderSide::Buy && t.instrument_price >= self.current_price)
-                || (self.order.side == OrderSide::Sell && t.instrument_price <= self.current_price)
-            {
-                canceled_top_ups.push(CanceledTopUp {
-                    id: t.id.clone(),
-                    date: t.date,
-                    assets: t.assets.clone(),
-                    instrument_price: t.instrument_price,
-                    asset_prices: t.asset_prices.clone(),
-                    cancel_instrument_price: self.current_price,
-                    cancel_date: DateTimeAsMicroseconds::now(),
-                });
-
-                return false;
-            }
-
-            true
-        });
-
-        if !canceled_top_ups.is_empty() {
-            self.update_pnl();
+        if last_top_up.date.is_later_than(delay_start_date) {
+            return None;
         }
 
-        canceled_top_ups
+        let change_percent = price_change_percent / 100.0;
+
+        if self.order.side == OrderSide::Buy
+            && self.current_price < last_top_up.instrument_price * (1.0 + change_percent)
+        {
+            return None;
+        }
+
+        if self.order.side == OrderSide::Sell
+            && self.current_price > last_top_up.instrument_price * (1.0 - change_percent)
+        {
+            return None;
+        }
+
+        let last_top_up = self.top_ups.pop().unwrap();
+
+        Some(last_top_up.cancel(self.current_price))
     }
 
     fn try_update_instrument_price(&mut self, bidask: &BidAsk) {
@@ -604,7 +605,8 @@ impl ActivePosition {
 
     pub fn add_top_up(&mut self, top_up: ActiveTopUp) {
         for (asset, price) in top_up.asset_prices.iter() {
-            self.current_asset_prices.insert(asset.to_owned(), price.to_owned());
+            self.current_asset_prices
+                .insert(asset.to_owned(), price.to_owned());
         }
 
         self.top_ups.push(top_up);
