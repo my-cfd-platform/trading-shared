@@ -15,7 +15,7 @@ pub struct PositionsMonitor {
 }
 
 impl PositionsMonitor {
-    pub fn with_capacity(
+    pub fn new(
         capacity: usize,
         cancel_top_up_delay: Duration,
         cancel_top_up_price_change_percent: f64,
