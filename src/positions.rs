@@ -316,41 +316,46 @@ impl ActivePosition {
         self.update_pnl();
     }
 
-    pub fn try_cancel_top_up(
+    pub fn try_cancel_top_ups(
         &mut self,
         price_change_percent: f64,
         delay: Duration,
-    ) -> Option<CanceledTopUp> {
-        let last_top_up = self.top_ups.last();
+    ) -> Vec<CanceledTopUp> {
 
-        let Some(last_top_up) = last_top_up else {
-            return None;
-        };
+        if self.top_ups.is_empty() {
+            return Vec::with_capacity(0);
+        }
+
+        let mut canceled_top_ups = Vec::with_capacity(self.top_ups.len() / 3);
 
         let mut delay_start_date = DateTimeAsMicroseconds::now();
         delay_start_date.sub(delay);
 
-        if last_top_up.date.is_later_than(delay_start_date) {
-            return None;
-        }
+        self.top_ups.retain(|top_up| {
+            if top_up.date.is_later_than(delay_start_date) {
+                return true;
+            }
 
-        let change_percent = price_change_percent / 100.0;
+            let change_percent = price_change_percent / 100.0;
 
-        if self.order.side == OrderSide::Buy
-            && self.current_price < last_top_up.instrument_price * (1.0 + change_percent)
-        {
-            return None;
-        }
+            if self.order.side == OrderSide::Buy
+                && self.current_price < top_up.instrument_price * (1.0 + change_percent)
+            {
+                return true;
+            }
 
-        if self.order.side == OrderSide::Sell
-            && self.current_price > last_top_up.instrument_price * (1.0 - change_percent)
-        {
-            return None;
-        }
+            if self.order.side == OrderSide::Sell
+                && self.current_price > top_up.instrument_price * (1.0 - change_percent)
+            {
+                return true;
+            }
 
-        let last_top_up = self.top_ups.pop().unwrap();
+            canceled_top_ups.push(top_up.to_owned().cancel(self.current_price));
 
-        Some(last_top_up.cancel(self.current_price))
+            false
+        });
+
+        canceled_top_ups
     }
 
     fn try_update_instrument_price(&mut self, bidask: &BidAsk) {

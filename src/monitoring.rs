@@ -148,16 +148,16 @@ impl PositionsMonitor {
                         );
                         events.push(event);
                     } else {
-                        let canceled_top_up = position.try_cancel_top_up(
+                        let canceled_top_ups = position.try_cancel_top_ups(
                             self.cancel_top_up_price_change_percent,
                             self.cancel_top_up_delay,
                         );
 
-                        if let Some(canceled_top_up) = canceled_top_up {
+                        if !canceled_top_ups.is_empty() {
                             self.locked_ids.insert(position.id.clone());
-                            let reason = PositionLockReason::TopUpCanceled((
+                            let reason = PositionLockReason::TopUpsCanceled((
                                 position.to_owned(),
-                                canceled_top_up,
+                                canceled_top_ups,
                             ));
                             let event = PositionMonitoringEvent::PositionLocked(reason);
                             events.push(event);
@@ -197,7 +197,7 @@ pub enum PositionMonitoringEvent {
 
 pub enum PositionLockReason {
     TopUp(ActivePosition),
-    TopUpCanceled((ActivePosition, CanceledTopUp)),
+    TopUpsCanceled((ActivePosition, Vec<CanceledTopUp>)),
 }
 
 #[cfg(test)]
