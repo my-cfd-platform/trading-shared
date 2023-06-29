@@ -619,15 +619,15 @@ impl ActivePosition {
     }
 
     fn update_pnl(&mut self) {
-        let order_invest_amount = self
-            .order
-            .calculate_invest_amount(&self.current_asset_prices);
-        let top_ups_amount = self.calculate_active_top_ups_amount(&self.current_asset_prices);
         let total_asset_pnls = self.calculate_total_asset_pnls();
         self.current_pnl = calculate_total_amount(&total_asset_pnls, &self.current_asset_prices);
         self.prev_loss_percent = self.current_loss_percent;
 
         if self.current_pnl < 0.0 {
+            let order_invest_amount = self
+                .order
+                .calculate_invest_amount(&self.current_asset_prices);
+            let top_ups_amount = self.calculate_active_top_ups_amount(&self.current_asset_prices);
             self.current_loss_percent =
                 calculate_percent(order_invest_amount + top_ups_amount, self.current_pnl.abs());
         } else {
