@@ -137,6 +137,15 @@ impl Order {
     }
 
     pub fn open(self, bidask: &BidAsk, asset_prices: &HashMap<String, f64>) -> Position {
+        self.open_with_id(Position::generate_id(), bidask, asset_prices)
+    }
+
+    pub fn open_with_id(
+        self,
+        id: String,
+        bidask: &BidAsk,
+        asset_prices: &HashMap<String, f64>,
+    ) -> Position {
         if self.validate_prices(asset_prices).is_err() {
             panic!("Can't open order: invalid prices");
         }
@@ -146,11 +155,13 @@ impl Order {
         }
 
         match self.get_type() {
-            OrderType::Market => Position::Active(self.into_active(bidask, asset_prices)),
+            OrderType::Market => {
+                let position = self.into_active(id, bidask, asset_prices);
+                Position::Active(position)
+            }
             OrderType::Limit => {
-                let pending_position = self.into_pending(bidask, asset_prices);
-
-                pending_position.try_activate()
+                let position = self.into_pending(id, bidask, asset_prices);
+                position.try_activate()
             }
         }
     }
@@ -163,11 +174,16 @@ impl Order {
         calculate_total_amount(&self.invest_assets, asset_prices)
     }
 
-    fn into_active(self, bidask: &BidAsk, asset_prices: &HashMap<String, f64>) -> ActivePosition {
+    fn into_active(
+        self,
+        id: String,
+        bidask: &BidAsk,
+        asset_prices: &HashMap<String, f64>,
+    ) -> ActivePosition {
         let now = DateTimeAsMicroseconds::now();
 
         ActivePosition {
-            id: Position::generate_id(),
+            id,
             open_date: now,
             open_asset_prices: asset_prices.to_owned(),
             activate_price: bidask.get_open_price(&self.side),
@@ -185,11 +201,16 @@ impl Order {
         }
     }
 
-    fn into_pending(self, bidask: &BidAsk, asset_prices: &HashMap<String, f64>) -> PendingPosition {
+    fn into_pending(
+        self,
+        id: String,
+        bidask: &BidAsk,
+        asset_prices: &HashMap<String, f64>,
+    ) -> PendingPosition {
         let now = DateTimeAsMicroseconds::now();
 
         PendingPosition {
-            id: Position::generate_id(),
+            id,
             open_date: now,
             open_asset_prices: asset_prices.to_owned(),
             current_asset_prices: asset_prices.to_owned(),
