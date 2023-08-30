@@ -1,4 +1,4 @@
-use crate::calculations::calculate_percent;
+use crate::calculations::{calculate_percent, floor};
 use crate::top_ups::{ActiveTopUp, CanceledTopUp};
 use crate::{
     calculations::calculate_total_amount,
@@ -321,7 +321,6 @@ impl ActivePosition {
         price_change_percent: f64,
         delay: Duration,
     ) -> Vec<CanceledTopUp> {
-
         if self.top_ups.is_empty() {
             return Vec::with_capacity(0);
         }
@@ -381,9 +380,13 @@ impl ActivePosition {
         }
     }
 
-    pub fn close(self, reason: ClosePositionReason) -> ClosedPosition {
-        let asset_pnls = self.calculate_total_asset_pnls();
-        let pnl = calculate_total_amount(&asset_pnls, &self.current_asset_prices);
+    pub fn close(self, reason: ClosePositionReason, pnl_accuracy: Option<u32>) -> ClosedPosition {
+        let asset_pnls = self.calculate_total_asset_pnls(pnl_accuracy);
+        let mut pnl = calculate_total_amount(&asset_pnls, &self.current_asset_prices);
+
+        if let Some(pnl_accuracy) = pnl_accuracy {
+            pnl = floor(pnl, pnl_accuracy);
+        }
 
         ClosedPosition {
             total_invest_assets: self.calculate_total_invest_assets(),
@@ -420,12 +423,12 @@ impl ActivePosition {
         None
     }
 
-    pub fn try_close(self) -> Position {
+    pub fn try_close(self, pnl_accuracy: Option<u32>) -> Position {
         let Some(reason) = self.determine_close_reason() else {
             return Position::Active(self);
         };
 
-        Position::Closed(self.close(reason))
+        Position::Closed(self.close(reason, pnl_accuracy))
     }
 
     fn is_take_profit(&self) -> bool {
@@ -538,7 +541,7 @@ impl ActivePosition {
     }
 
     /// Calculates pnl by all invested assets, includes order, and top-ups
-    pub fn calculate_total_asset_pnls(&self) -> HashMap<String, f64> {
+    pub fn calculate_total_asset_pnls(&self, pnl_accuracy: Option<u32>) -> HashMap<String, f64> {
         let mut asset_pnls = HashMap::new();
 
         for (asset, amount) in self.calculate_order_assets_pnls().into_iter() {
@@ -546,7 +549,17 @@ impl ActivePosition {
 
             if let Some(asset_pnl) = asset_pnl {
                 *asset_pnl += amount;
+
+                if let Some(pnl_accuracy) = pnl_accuracy {
+                    *asset_pnl = floor(*asset_pnl, pnl_accuracy);
+                };
             } else {
+                let amount = if let Some(pnl_accuracy) = pnl_accuracy {
+                    floor(amount, pnl_accuracy)
+                } else {
+                    amount
+                };
+
                 asset_pnls.insert(asset, amount);
             }
         }
@@ -556,7 +569,17 @@ impl ActivePosition {
 
             if let Some(asset_pnl) = asset_pnl {
                 *asset_pnl += amount;
+
+                if let Some(pnl_accuracy) = pnl_accuracy {
+                    *asset_pnl = floor(*asset_pnl, pnl_accuracy);
+                };
             } else {
+                let amount = if let Some(pnl_accuracy) = pnl_accuracy {
+                    floor(amount, pnl_accuracy)
+                } else {
+                    amount
+                };
+
                 asset_pnls.insert(asset, amount);
             }
         }
@@ -619,7 +642,7 @@ impl ActivePosition {
     }
 
     fn update_pnl(&mut self) {
-        let total_asset_pnls = self.calculate_total_asset_pnls();
+        let total_asset_pnls = self.calculate_total_asset_pnls(None);
         self.current_pnl = calculate_total_amount(&total_asset_pnls, &self.current_asset_prices);
         self.prev_loss_percent = self.current_loss_percent;
 
@@ -712,7 +735,7 @@ mod tests {
         };
 
         position.current_price = 14.75;
-        let closed_position = position.close(ClosePositionReason::ClientCommand);
+        let closed_position = position.close(ClosePositionReason::ClientCommand, None);
 
         let pnl = closed_position.pnl.unwrap();
         let asset_pnl = *closed_position.asset_pnls.get("BTC").unwrap();
@@ -742,7 +765,7 @@ mod tests {
         position.set_take_profit(Some(take_profit));
         position.current_price = 13.817;
 
-        let position = position.try_close();
+        let position = position.try_close(None);
         let _position = match position {
             Position::Closed(position) => position,
             _ => panic!("must be closed"),

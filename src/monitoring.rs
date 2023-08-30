@@ -12,6 +12,7 @@ pub struct PositionsMonitor {
     cancel_top_up_delay: Duration,
     cancel_top_up_price_change_percent: f64,
     locked_ids: AHashSet<String>,
+    pnl_accuracy: Option<u32>
 }
 
 impl PositionsMonitor {
@@ -19,6 +20,7 @@ impl PositionsMonitor {
         capacity: usize,
         cancel_top_up_delay: Duration,
         cancel_top_up_price_change_percent: f64,
+        pnl_accuracy: Option<u32>
     ) -> Self {
         Self {
             positions_cache: PositionsCache::with_capacity(capacity),
@@ -26,6 +28,7 @@ impl PositionsMonitor {
             cancel_top_up_delay,
             locked_ids: AHashSet::with_capacity(capacity),
             cancel_top_up_price_change_percent,
+            pnl_accuracy
         }
     }
 
@@ -173,7 +176,7 @@ impl PositionsMonitor {
                             Position::Active(position) => position,
                             _ => panic!("Position is in Active case"),
                         };
-                        let position = position.close(reason);
+                        let position = position.close(reason, self.pnl_accuracy);
                         events.push(PositionMonitoringEvent::PositionClosed(position));
 
                         false // remove closed position
