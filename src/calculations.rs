@@ -51,3 +51,18 @@ pub fn calculate_total_amount(
 
     total_amount
 }
+
+pub fn ceil(x: f64, precision: u32) -> f64 {
+    let y = 10_i64.pow(precision) as f64;
+    (x * y).ceil() / y
+}
+
+pub fn floor(x: f64, precision: u32) -> f64 {
+    let y = 10_i64.pow(precision) as f64;
+    (x * y).floor() / y
+}
+
+pub fn round(x: f64, precision: u32) -> f64 {
+    let y = 10_i64.pow(precision) as f64;
+    (x * y).round() / y
+}
