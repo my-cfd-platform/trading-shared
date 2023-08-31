@@ -88,8 +88,16 @@ impl PositionsMonitor {
         todo!()
     }
 
-    pub fn update_wallet(&mut self, balance: WalletBalance) {
-        todo!()
+    pub fn update_wallet(&mut self, wallet_id: &str, balance: WalletBalance) -> Result<Option<Wallet>, String> {
+        let wallet = self.wallets_by_ids.get_mut(wallet_id);
+
+        let Some(wallet) = wallet else {
+            return Ok(None);
+        };
+
+        wallet.update_balance(balance)?;
+
+        Ok(Some(wallet.to_owned()))
     }
 
     pub fn add(&mut self, position: Position) {

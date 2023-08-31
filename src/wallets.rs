@@ -117,9 +117,22 @@ impl Wallet {
     pub fn update_balance(
         &mut self,
         balance: WalletBalance,
-        bid_ask: &BidAsk,
     ) -> Result<(), String> {
-        todo!()
+        let id = BidAsk::generate_id(&balance.asset_symbol, &self.estimate_asset);
+        let inner_balance = self.balances_by_instrument.remove(&id);
+
+        let Some(inner_balance) = inner_balance else {
+            return Err("Balance not found".to_string());
+        };
+
+        let price = self.estimated_prices_by_balance_id.get(&inner_balance.id).expect("invalid add");
+        let estimate_amount = self.estimated_amounts_by_balance_id.get_mut(&balance.id).expect("invalid add");
+        self.total_balance -= *estimate_amount;
+        *estimate_amount = balance.asset_amount * price;
+        self.total_balance *= *estimate_amount;
+        self.balances_by_instrument.insert(id, balance);
+
+        Ok(())
     }
 
     pub fn update_price(&mut self, bid_ask: &BidAsk) {
