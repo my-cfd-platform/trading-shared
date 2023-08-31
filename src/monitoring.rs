@@ -1,4 +1,5 @@
 use crate::top_ups::CanceledTopUp;
+use crate::wallets::{Wallet, WalletBalance};
 use crate::{
     caches::PositionsCache,
     positions::{ActivePosition, BidAsk, ClosedPosition, Position},
@@ -13,7 +14,8 @@ pub struct PositionsMonitor {
     cancel_top_up_price_change_percent: f64,
     locked_ids: AHashSet<String>,
     pnl_accuracy: Option<u32>,
-    pnls_by_wallets: AHashMap<String, AHashMap<String, f64>>,
+    wallets_by_ids: AHashMap<String, Wallet>,
+    wallet_ids_by_instruments: AHashMap<String, Vec<String>>,
 }
 
 impl PositionsMonitor {
@@ -21,29 +23,28 @@ impl PositionsMonitor {
         capacity: usize,
         cancel_top_up_delay: Duration,
         cancel_top_up_price_change_percent: f64,
-        pnl_accuracy: Option<u32>
+        pnl_accuracy: Option<u32>,
     ) -> Self {
         Self {
-            pnls_by_wallets: AHashMap::with_capacity(capacity),
+            wallets_by_ids: Default::default(),
             positions_cache: PositionsCache::with_capacity(capacity),
             ids_by_instruments: AHashMap::with_capacity(capacity),
             cancel_top_up_delay,
             locked_ids: AHashSet::with_capacity(capacity),
             cancel_top_up_price_change_percent,
-            pnl_accuracy
+            pnl_accuracy,
+            wallet_ids_by_instruments: Default::default(),
         }
     }
 
     pub fn get_wallet_pnl(&self, wallet_id: &str) -> Option<f64> {
-        let pnls_by_instrument = self.pnls_by_wallets.get(wallet_id);
+        let wallet = self.wallets_by_ids.get(wallet_id);
 
-        let Some(pnls_by_instrument) = pnls_by_instrument else {
-            return None;
-        };
+        if let Some(wallet) = wallet {
+            return Some(wallet.calc_pnl());
+        }
 
-        let total_pnl: f64 = pnls_by_instrument.iter().map(|(_instrument, pnl)| pnl).sum();
-
-        Some(total_pnl)
+        None
     }
 
     pub fn remove(&mut self, position_id: &str) -> Option<Position> {
@@ -56,15 +57,13 @@ impl PositionsMonitor {
         if let Some(position) = position.as_ref() {
             match position {
                 Position::Active(position) => {
-                    let pnls_by_instruments =
-                        self.pnls_by_wallets.get_mut(&position.order.wallet_id);
+                    let wallet = self.wallets_by_ids.get_mut(&position.order.wallet_id);
 
-                    if let Some(pnls_by_instruments) = pnls_by_instruments {
-                        let pnl = pnls_by_instruments.get_mut(&position.order.instrument);
-
-                        if let Some(pnl) = pnl {
-                            *pnl -= position.current_pnl;
-                        }
+                    if let Some(wallet) = wallet {
+                        wallet.deduct_instrument_pnl(
+                            &position.order.instrument,
+                            position.current_pnl,
+                        );
                     }
                 }
                 Position::Closed(_) => {}
@@ -83,6 +82,14 @@ impl PositionsMonitor {
                 ids.remove(position.get_id());
             }
         }
+    }
+
+    pub fn add_wallet(&mut self, wallet: Wallet) {
+        todo!()
+    }
+
+    pub fn update_wallet(&mut self, balance: WalletBalance) {
+        todo!()
     }
 
     pub fn add(&mut self, position: Position) {
@@ -126,7 +133,7 @@ impl PositionsMonitor {
         };
 
         let mut events = Vec::with_capacity(position_ids.len());
-        let mut pnls_by_wallet_id: AHashMap<String, f64> =
+        let mut pnls_by_wallet_ids: AHashMap<String, f64> =
             AHashMap::with_capacity(position_ids.len());
 
         position_ids.retain(|position_id| {
@@ -162,12 +169,12 @@ impl PositionsMonitor {
                                 _ => panic!("Checked"),
                             };
                         let position = position.into_active();
-                        let wallet_pnl = pnls_by_wallet_id.get_mut(&position.order.wallet_id);
+                        let wallet_pnl = pnls_by_wallet_ids.get_mut(&position.order.wallet_id);
 
                         if let Some(wallet_pnl) = wallet_pnl {
                             *wallet_pnl += position.current_pnl;
                         } else {
-                            pnls_by_wallet_id
+                            pnls_by_wallet_ids
                                 .insert(position.order.wallet_id.clone(), position.current_pnl);
                         }
 
@@ -223,12 +230,12 @@ impl PositionsMonitor {
 
                         false // remove closed position
                     } else {
-                        let wallet_pnl = pnls_by_wallet_id.get_mut(&position.order.wallet_id);
+                        let wallet_pnl = pnls_by_wallet_ids.get_mut(&position.order.wallet_id);
 
                         if let Some(wallet_pnl) = wallet_pnl {
                             *wallet_pnl += position.current_pnl;
                         } else {
-                            pnls_by_wallet_id
+                            pnls_by_wallet_ids
                                 .insert(position.order.wallet_id.clone(), position.current_pnl);
                         }
 
@@ -238,14 +245,56 @@ impl PositionsMonitor {
             }
         });
 
-        for (wallet_id, pnl) in pnls_by_wallet_id {
-            let pnls_by_instruments = self.pnls_by_wallets.get_mut(&wallet_id);
+        self.update_wallet_balances(bidask);
+        let wallet_events = self.update_wallet_pnls(bidask, pnls_by_wallet_ids);
 
-            if let Some(pnls_by_instruments) = pnls_by_instruments {
-                pnls_by_instruments.insert(bidask.instrument.clone(), pnl);
-            } else {
-                let pnl = AHashMap::from([(bidask.instrument.clone(), pnl)]);
-                self.pnls_by_wallets.insert(wallet_id, pnl);
+        for event in wallet_events.into_iter() {
+            events.push(event);
+        }
+
+        events
+    }
+
+    fn update_wallet_balances(&mut self, bidask: &BidAsk) {
+        let wallet_ids = self.wallet_ids_by_instruments.get_mut(&bidask.instrument);
+
+        if let Some(wallet_ids) = wallet_ids {
+            for wallet_id in wallet_ids {
+                let wallet = self
+                    .wallets_by_ids
+                    .get_mut(wallet_id)
+                    .expect("invalid wallet add");
+                wallet.update_price(bidask);
+            }
+        }
+    }
+
+    fn update_wallet_pnls(
+        &mut self,
+        bidask: &BidAsk,
+        pnls_by_wallet_ids: AHashMap<String, f64>,
+    ) -> Vec<PositionMonitoringEvent> {
+        let mut events = Vec::new();
+
+        for (wallet_id, pnl) in pnls_by_wallet_ids {
+            let wallet = self.wallets_by_ids.get_mut(&wallet_id);
+
+            let Some(wallet) = wallet else {
+                continue;
+            };
+
+            wallet.set_instrument_pnl(&bidask.instrument, pnl);
+            wallet.update_loss();
+
+            if wallet.is_margin_call() {
+                events.push(PositionMonitoringEvent::WalletMarginCall(
+                    WalletMarginCallInfo {
+                        loss_percent: wallet.current_loss_percent,
+                        pnl,
+                        wallet_id: wallet.id.clone(),
+                        trader_id: wallet.trader_id.clone(),
+                    },
+                ));
             }
         }
 
@@ -258,11 +307,19 @@ pub enum PositionMonitoringEvent {
     PositionActivated(ActivePosition),
     PositionMarginCall(ActivePosition),
     PositionLocked(PositionLockReason),
+    WalletMarginCall(WalletMarginCallInfo),
 }
 
 pub enum PositionLockReason {
     TopUp(ActivePosition),
     TopUpsCanceled((ActivePosition, Vec<CanceledTopUp>)),
+}
+
+pub struct WalletMarginCallInfo {
+    pub loss_percent: f64,
+    pub pnl: f64,
+    pub wallet_id: String,
+    pub trader_id: String,
 }
 
 #[cfg(test)]

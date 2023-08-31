@@ -1,12 +1,151 @@
+use crate::calculations::calculate_percent;
+use crate::orders::OrderSide;
+use crate::positions::BidAsk;
 use ahash::AHashMap;
 
+#[derive(Clone)]
 pub struct Wallet {
     pub id: String,
-    pub balances_by_asset: AHashMap<String, WalletBalance>,
+    pub trader_id: String,
+    pub total_balance: f64,
+    pub margin_call_percent: f64,
+    pub current_loss_percent: f64,
+    prev_loss_percent: f64,
+    estimate_asset: String,
+    balances_by_instrument: AHashMap<String, WalletBalance>,
+    estimated_amounts_by_balance_id: AHashMap<String, f64>,
+    estimated_prices_by_balance_id: AHashMap<String, f64>,
+    pnls_by_instruments: AHashMap<String, f64>,
 }
 
+impl Wallet {
+    pub fn new(
+        id: impl Into<String>,
+        trader_id: impl Into<String>,
+        estimate_asset: impl Into<String>,
+        margin_call_percent: f64,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            trader_id: trader_id.into(),
+            total_balance: 0.0,
+            estimate_asset: estimate_asset.into(),
+            balances_by_instrument: Default::default(),
+            estimated_amounts_by_balance_id: Default::default(),
+            estimated_prices_by_balance_id: Default::default(),
+            margin_call_percent,
+            current_loss_percent: 0.0,
+            prev_loss_percent: 0.0,
+            pnls_by_instruments: Default::default(),
+        }
+    }
+
+    pub fn set_instrument_pnl(&mut self, instrument: &str, instrument_pnl: f64) {
+        let pnl = self.pnls_by_instruments.get_mut(instrument);
+
+        if let Some(pnl) = pnl {
+            *pnl = instrument_pnl;
+        } else {
+            self.pnls_by_instruments.insert(instrument.to_string(), instrument_pnl);
+        }
+    }
+
+    pub fn deduct_instrument_pnl(&mut self, instrument: &str, instrument_pnl: f64) {
+        let pnl = self.pnls_by_instruments.get_mut(instrument);
+
+        if let Some(pnl) = pnl {
+            *pnl -= instrument_pnl;
+        }
+    }
+
+    pub fn add_instrument_pnl(&mut self, instrument: &str, instrument_pnl: f64) {
+        let pnl = self.pnls_by_instruments.get_mut(instrument);
+
+        if let Some(pnl) = pnl {
+            *pnl += instrument_pnl;
+        } else {
+            self.pnls_by_instruments.insert(instrument.to_string(), instrument_pnl);
+        }
+    }
+
+    pub fn calc_pnl(&self) -> f64 {
+        self.pnls_by_instruments.iter().map(|(_, pnl)| pnl).sum()
+    }
+
+    pub fn update_loss(&mut self) {
+        self.prev_loss_percent = self.current_loss_percent;
+        let pnl: f64 = self.calc_pnl();
+
+        if pnl < 0.0 {
+            self.current_loss_percent = calculate_percent(self.total_balance, pnl.abs());
+        } else {
+            self.current_loss_percent = 0.0;
+        }
+    }
+
+    pub fn is_margin_call(&self) -> bool {
+        self.current_loss_percent >= self.margin_call_percent
+            && self.prev_loss_percent < self.margin_call_percent
+    }
+
+    pub fn add_balance(&mut self, balance: WalletBalance, bid_ask: &BidAsk) -> Result<(), String> {
+        let id = BidAsk::generate_id(&balance.asset_symbol, &self.estimate_asset);
+
+        if bid_ask.instrument != id {
+            return Err(format!("BidAsk instrument must be {}", id));
+        }
+
+        let estimate_amount = if balance.asset_symbol == self.estimate_asset {
+            self.estimated_prices_by_balance_id
+                .insert(balance.id.clone(), 1.0);
+            balance.asset_amount
+        } else {
+            let price = bid_ask.get_asset_price(&balance.asset_symbol, &OrderSide::Sell);
+            self.estimated_prices_by_balance_id
+                .insert(balance.id.clone(), price);
+            balance.asset_amount * price
+        };
+
+        self.estimated_amounts_by_balance_id
+            .insert(balance.id.clone(), estimate_amount);
+        self.balances_by_instrument.insert(id, balance);
+        self.total_balance += estimate_amount;
+
+        Ok(())
+    }
+
+    pub fn update_balance(
+        &mut self,
+        balance: WalletBalance,
+        bid_ask: &BidAsk,
+    ) -> Result<(), String> {
+        todo!()
+    }
+
+    pub fn update_price(&mut self, bid_ask: &BidAsk) {
+        let balance = self.balances_by_instrument.get(&bid_ask.instrument);
+
+        if let Some(balance) = balance {
+            let estimate_balance_amount = self
+                .estimated_amounts_by_balance_id
+                .get_mut(&balance.id)
+                .expect("invalid add or update");
+            self.total_balance -= *estimate_balance_amount;
+            let price = bid_ask.get_asset_price(&balance.asset_symbol, &OrderSide::Sell);
+            *estimate_balance_amount = balance.asset_amount * price;
+            self.total_balance += *estimate_balance_amount;
+            let estimate_price = self
+                .estimated_prices_by_balance_id
+                .get_mut(&balance.id)
+                .expect("invalid add or update");
+            *estimate_price = price;
+        }
+    }
+}
+
+#[derive(Clone)]
 pub struct WalletBalance {
     pub id: String,
     pub asset_symbol: String,
-    pub available_asset_amount: f64,
+    pub asset_amount: f64,
 }
