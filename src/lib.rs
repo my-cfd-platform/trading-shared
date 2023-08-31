@@ -4,6 +4,7 @@ pub mod caches;
 pub mod calculations;
 pub mod monitoring;
 pub mod top_ups;
+pub mod wallets;
 
 #[cfg(test)]
 mod tests {
