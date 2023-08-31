@@ -12,7 +12,7 @@ pub struct Wallet {
     pub current_loss_percent: f64,
     prev_loss_percent: f64,
     estimate_asset: String,
-    balances_by_instrument: AHashMap<String, WalletBalance>,
+    balances_by_instruments: AHashMap<String, WalletBalance>,
     estimated_amounts_by_balance_id: AHashMap<String, f64>,
     estimated_prices_by_balance_id: AHashMap<String, f64>,
     pnls_by_instruments: AHashMap<String, f64>,
@@ -30,7 +30,7 @@ impl Wallet {
             trader_id: trader_id.into(),
             total_balance: 0.0,
             estimate_asset: estimate_asset.into(),
-            balances_by_instrument: Default::default(),
+            balances_by_instruments: Default::default(),
             estimated_amounts_by_balance_id: Default::default(),
             estimated_prices_by_balance_id: Default::default(),
             margin_call_percent,
@@ -38,6 +38,10 @@ impl Wallet {
             prev_loss_percent: 0.0,
             pnls_by_instruments: Default::default(),
         }
+    }
+
+    pub fn get_instruments(&self) -> Vec<&String> {
+        self.balances_by_instruments.keys().collect()
     }
 
     pub fn set_instrument_pnl(&mut self, instrument: &str, instrument_pnl: f64) {
@@ -108,7 +112,7 @@ impl Wallet {
 
         self.estimated_amounts_by_balance_id
             .insert(balance.id.clone(), estimate_amount);
-        self.balances_by_instrument.insert(id, balance);
+        self.balances_by_instruments.insert(id, balance);
         self.total_balance += estimate_amount;
 
         Ok(())
@@ -119,7 +123,7 @@ impl Wallet {
         balance: WalletBalance,
     ) -> Result<(), String> {
         let id = BidAsk::generate_id(&balance.asset_symbol, &self.estimate_asset);
-        let inner_balance = self.balances_by_instrument.remove(&id);
+        let inner_balance = self.balances_by_instruments.remove(&id);
 
         let Some(inner_balance) = inner_balance else {
             return Err("Balance not found".to_string());
@@ -130,13 +134,13 @@ impl Wallet {
         self.total_balance -= *estimate_amount;
         *estimate_amount = balance.asset_amount * price;
         self.total_balance *= *estimate_amount;
-        self.balances_by_instrument.insert(id, balance);
+        self.balances_by_instruments.insert(id, balance);
 
         Ok(())
     }
 
     pub fn update_price(&mut self, bid_ask: &BidAsk) {
-        let balance = self.balances_by_instrument.get(&bid_ask.instrument);
+        let balance = self.balances_by_instruments.get(&bid_ask.instrument);
 
         if let Some(balance) = balance {
             let estimate_balance_amount = self
