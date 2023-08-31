@@ -34,6 +34,18 @@ impl PositionsMonitor {
         }
     }
 
+    pub fn get_wallet_pnl(&self, wallet_id: &str) -> Option<f64> {
+        let pnls_by_instrument = self.pnls_by_wallets.get(wallet_id);
+
+        let Some(pnls_by_instrument) = pnls_by_instrument else {
+            return None;
+        };
+
+        let total_pnl: f64 = pnls_by_instrument.iter().map(|(_instrument, pnl)| pnl).sum();
+
+        Some(total_pnl)
+    }
+
     pub fn remove(&mut self, position_id: &str) -> Option<Position> {
         if self.locked_ids.contains(position_id) {
             return None;
