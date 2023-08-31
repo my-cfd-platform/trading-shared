@@ -91,14 +91,19 @@ impl PositionsMonitor {
             if let Some(wallet_ids) = wallet_ids {
                 wallet_ids.push(wallet.id.clone());
             } else {
-                self.wallet_ids_by_instruments.insert(instrument.to_owned(), vec![wallet.id.clone()]);
+                self.wallet_ids_by_instruments
+                    .insert(instrument.to_owned(), vec![wallet.id.clone()]);
             }
         }
 
         self.wallets_by_ids.insert(wallet.id.clone(), wallet);
     }
 
-    pub fn update_wallet(&mut self, wallet_id: &str, balance: WalletBalance) -> Result<Option<Wallet>, String> {
+    pub fn update_wallet(
+        &mut self,
+        wallet_id: &str,
+        balance: WalletBalance,
+    ) -> Result<Option<Wallet>, String> {
         let wallet = self.wallets_by_ids.get_mut(wallet_id);
 
         let Some(wallet) = wallet else {
