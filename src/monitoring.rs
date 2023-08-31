@@ -15,7 +15,7 @@ pub struct PositionsMonitor {
     locked_ids: AHashSet<String>,
     pnl_accuracy: Option<u32>,
     wallets_by_ids: AHashMap<String, Wallet>,
-    wallet_ids_by_instruments: AHashMap<String, Vec<String>>,
+    wallet_ids_by_instruments: AHashMap<String, AHashSet<String>>,
 }
 
 impl PositionsMonitor {
@@ -57,29 +57,46 @@ impl PositionsMonitor {
         if let Some(position) = position.as_ref() {
             match position {
                 Position::Active(position) => {
-                    let wallet = self.wallets_by_ids.get_mut(&position.order.wallet_id);
+                    if self
+                        .positions_cache
+                        .contains_by_wallet_id(&position.order.wallet_id)
+                    {
+                        let wallet = self.wallets_by_ids.get_mut(&position.order.wallet_id);
 
-                    if let Some(wallet) = wallet {
-                        wallet.deduct_instrument_pnl(
-                            &position.order.instrument,
-                            position.current_pnl,
-                        );
+                        if let Some(wallet) = wallet {
+                            wallet.deduct_instrument_pnl(
+                                &position.order.instrument,
+                                position.current_pnl,
+                            );
+                        }
+                    } else {
+                        self.remove_wallet(&position.order.wallet_id);
                     }
                 }
                 Position::Closed(_) => {}
                 Position::Pending(_) => {}
             }
 
-            self.remove_from_instruments_map(position);
+            for instrument in position.get_instruments() {
+                if let Some(ids) = self.ids_by_instruments.get_mut(&instrument) {
+                    ids.remove(position.get_id());
+                }
+            }
         }
 
         position
     }
 
-    fn remove_from_instruments_map(&mut self, position: &Position) {
-        for instrument in position.get_instruments() {
-            if let Some(ids) = self.ids_by_instruments.get_mut(&instrument) {
-                ids.remove(position.get_id());
+    pub fn remove_wallet(&mut self, wallet_id: &str) {
+        let wallet = self.wallets_by_ids.remove(wallet_id);
+
+        if let Some(wallet) = wallet {
+            for instrument in wallet.get_instruments() {
+                let wallet_ids = self.wallet_ids_by_instruments.get_mut(instrument);
+
+                if let Some(wallet_ids) = wallet_ids {
+                    wallet_ids.remove(wallet_id);
+                }
             }
         }
     }
@@ -89,10 +106,10 @@ impl PositionsMonitor {
             let wallet_ids = self.wallet_ids_by_instruments.get_mut(instrument);
 
             if let Some(wallet_ids) = wallet_ids {
-                wallet_ids.push(wallet.id.clone());
+                wallet_ids.insert(wallet.id.clone());
             } else {
                 self.wallet_ids_by_instruments
-                    .insert(instrument.to_owned(), vec![wallet.id.clone()]);
+                    .insert(instrument.to_owned(), AHashSet::from([wallet.id.clone()]));
             }
         }
 
@@ -116,11 +133,6 @@ impl PositionsMonitor {
     }
 
     pub fn add(&mut self, position: Position) {
-        self.add_to_instruments_map(&position);
-        self.positions_cache.add(position);
-    }
-
-    fn add_to_instruments_map(&mut self, position: &Position) {
         let id = position.get_id().to_owned();
         let instruments = position.get_instruments();
 
@@ -132,7 +144,10 @@ impl PositionsMonitor {
                     .insert(invest_instrument, AHashSet::from([id.clone()]));
             }
         }
+
+        self.positions_cache.add(position);
     }
+
 
     pub fn get_by_wallet_id(&self, wallet_id: &str) -> Vec<&Position> {
         self.positions_cache.get_by_wallet_id(wallet_id)
@@ -282,7 +297,7 @@ impl PositionsMonitor {
         let wallet_ids = self.wallet_ids_by_instruments.get_mut(&bidask.instrument);
 
         if let Some(wallet_ids) = wallet_ids {
-            for wallet_id in wallet_ids {
+            for wallet_id in wallet_ids.iter() {
                 let wallet = self
                     .wallets_by_ids
                     .get_mut(wallet_id)

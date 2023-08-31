@@ -118,6 +118,10 @@ impl PositionsCache {
         Vec::with_capacity(0)
     }
 
+    pub fn contains_by_wallet_id(&self, wallet_id: &str) -> bool {
+        self.ids_by_wallets.contains_key(wallet_id)
+    }
+
     pub fn get_mut(&mut self, id: &str) -> Option<&mut Position> {
         self.positions_by_ids.get_mut(id)
     }
