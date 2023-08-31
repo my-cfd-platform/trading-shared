@@ -148,7 +148,6 @@ impl PositionsMonitor {
         self.positions_cache.add(position);
     }
 
-
     pub fn get_by_wallet_id(&self, wallet_id: &str) -> Vec<&Position> {
         self.positions_cache.get_by_wallet_id(wallet_id)
     }
@@ -173,6 +172,7 @@ impl PositionsMonitor {
         let mut events = Vec::with_capacity(position_ids.len());
         let mut pnls_by_wallet_ids: AHashMap<String, f64> =
             AHashMap::with_capacity(position_ids.len());
+        let mut wallet_ids_to_remove = vec![];
 
         position_ids.retain(|position_id| {
             if self.locked_ids.contains(position_id) {
@@ -264,6 +264,14 @@ impl PositionsMonitor {
                             _ => panic!("Position is in Active case"),
                         };
                         let position = position.close(reason, self.pnl_accuracy);
+
+                        if self
+                            .positions_cache
+                            .contains_by_wallet_id(&position.order.wallet_id)
+                        {
+                            wallet_ids_to_remove.push(position.order.wallet_id.clone());
+                        }
+
                         events.push(PositionMonitoringEvent::PositionClosed(position));
 
                         false // remove closed position
@@ -282,6 +290,10 @@ impl PositionsMonitor {
                 }
             }
         });
+
+        for wallet_id in wallet_ids_to_remove {
+            self.remove_wallet(&wallet_id);
+        }
 
         self.update_wallet_balances(bidask);
         let wallet_events = self.update_wallet_pnls(bidask, pnls_by_wallet_ids);
