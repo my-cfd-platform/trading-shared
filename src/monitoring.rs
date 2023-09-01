@@ -47,6 +47,10 @@ impl PositionsMonitor {
         None
     }
 
+    pub fn contains_wallet(&self, wallet_id: &str) -> bool {
+        self.wallets_by_ids.contains_key(wallet_id)
+    }
+
     pub fn remove(&mut self, position_id: &str) -> Option<Position> {
         if self.locked_ids.contains(position_id) {
             return None;
