@@ -373,6 +373,7 @@ pub enum PositionLockReason {
     TopUpsCanceled((ActivePosition, Vec<CanceledTopUp>)),
 }
 
+#[derive(Debug)]
 pub struct WalletMarginCallInfo {
     pub loss_percent: f64,
     pub pnl: f64,
