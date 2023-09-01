@@ -93,10 +93,10 @@ impl Wallet {
     }
 
     pub fn add_balance(&mut self, balance: WalletBalance, bid_ask: &BidAsk) -> Result<(), String> {
-        let id = BidAsk::generate_id(&balance.asset_symbol, &self.estimate_asset);
+        let instrument_id = BidAsk::generate_id(&balance.asset_symbol, &self.estimate_asset);
 
-        if bid_ask.instrument != id {
-            return Err(format!("BidAsk instrument must be {}", id));
+        if bid_ask.instrument != instrument_id {
+            return Err(format!("BidAsk instrument must be {}", instrument_id));
         }
 
         let estimate_amount = if balance.asset_symbol == self.estimate_asset {
@@ -112,7 +112,7 @@ impl Wallet {
 
         self.estimated_amounts_by_balance_id
             .insert(balance.id.clone(), estimate_amount);
-        self.balances_by_instruments.insert(id, balance);
+        self.balances_by_instruments.insert(instrument_id, balance);
         self.total_balance += estimate_amount;
 
         Ok(())
