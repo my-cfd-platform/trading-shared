@@ -30,6 +30,15 @@ pub struct BidAsk {
 }
 
 impl BidAsk {
+    pub fn new_synthetic(id: impl Into<String>, bid: f64, ask: f64) -> Self {
+        Self {
+            instrument: id.into(),
+            datetime: DateTimeAsMicroseconds::now(),
+            bid,
+            ask,
+        }
+    }
+
     pub fn generate_id(base_asset: &str, quote_asset: &str) -> String {
         let id = format!("{}{}", base_asset, quote_asset); // todo: find better solution
 
