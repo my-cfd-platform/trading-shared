@@ -37,11 +37,11 @@ impl PositionsMonitor {
         }
     }
 
-    pub fn get_wallet_pnl(&self, wallet_id: &str) -> Option<f64> {
+    pub fn get_wallet(&self, wallet_id: &str) -> Option<&Wallet> {
         let wallet = self.wallets_by_ids.get(wallet_id);
 
         if let Some(wallet) = wallet {
-            return Some(wallet.calc_pnl());
+            return Some(wallet);
         }
 
         None
