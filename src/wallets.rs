@@ -14,7 +14,7 @@ pub struct Wallet {
     estimate_asset: String,
     balances_by_instruments: AHashMap<String, WalletBalance>,
     estimated_amounts_by_balance_id: AHashMap<String, f64>,
-    estimated_prices_by_balance_id: AHashMap<String, f64>,
+    prices_by_assets: AHashMap<String, f64>,
     top_up_pnls_by_instruments: AHashMap<String, f64>,
 }
 
@@ -32,7 +32,7 @@ impl Wallet {
             estimate_asset: estimate_asset.into(),
             balances_by_instruments: Default::default(),
             estimated_amounts_by_balance_id: Default::default(),
-            estimated_prices_by_balance_id: Default::default(),
+            prices_by_assets: Default::default(),
             margin_call_percent,
             current_loss_percent: 0.0,
             prev_loss_percent: 0.0,
@@ -100,13 +100,13 @@ impl Wallet {
         }
 
         let estimate_amount = if balance.asset_symbol == self.estimate_asset {
-            self.estimated_prices_by_balance_id
-                .insert(balance.id.clone(), 1.0);
+            self.prices_by_assets
+                .insert(balance.asset_symbol.clone(), 1.0);
             balance.asset_amount
         } else {
             let price = bid_ask.get_asset_price(&balance.asset_symbol, &OrderSide::Sell);
-            self.estimated_prices_by_balance_id
-                .insert(balance.id.clone(), price);
+            self.prices_by_assets
+                .insert(balance.asset_symbol.clone(), price);
             balance.asset_amount * price
         };
 
@@ -129,7 +129,7 @@ impl Wallet {
             return Err("Balance not found".to_string());
         };
 
-        let price = self.estimated_prices_by_balance_id.get(&inner_balance.id).expect("invalid add");
+        let price = self.prices_by_assets.get(&inner_balance.asset_symbol).expect("invalid add");
         let estimate_amount = self.estimated_amounts_by_balance_id.get_mut(&balance.id).expect("invalid add");
         self.total_balance -= *estimate_amount;
         *estimate_amount = balance.asset_amount * price;
@@ -152,8 +152,8 @@ impl Wallet {
             *estimate_balance_amount = balance.asset_amount * price;
             self.total_balance += *estimate_balance_amount;
             let estimate_price = self
-                .estimated_prices_by_balance_id
-                .get_mut(&balance.id)
+                .prices_by_assets
+                .get_mut(&balance.asset_symbol)
                 .expect("invalid add or update");
             *estimate_price = price;
         }
