@@ -3,7 +3,7 @@ use crate::orders::OrderSide;
 use crate::positions::BidAsk;
 use ahash::AHashMap;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Wallet {
     pub id: String,
     pub trader_id: String,
@@ -160,7 +160,7 @@ impl Wallet {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct WalletBalance {
     pub id: String,
     pub asset_symbol: String,
