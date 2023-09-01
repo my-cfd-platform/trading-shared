@@ -57,9 +57,10 @@ impl PositionsMonitor {
         if let Some(position) = position.as_ref() {
             match position {
                 Position::Active(position) => {
-                    if self
-                        .positions_cache
-                        .contains_by_wallet_id(&position.order.wallet_id)
+                    if position.order.top_up_enabled
+                        && self
+                            .positions_cache
+                            .contains_by_wallet_id(&position.order.wallet_id)
                     {
                         let wallet = self.wallets_by_ids.get_mut(&position.order.wallet_id);
 
@@ -170,7 +171,7 @@ impl PositionsMonitor {
         };
 
         let mut events = Vec::with_capacity(position_ids.len());
-        let mut pnls_by_wallet_ids: AHashMap<String, f64> =
+        let mut top_up_pnls_by_wallet_ids: AHashMap<String, f64> =
             AHashMap::with_capacity(position_ids.len());
         let mut wallet_ids_to_remove = vec![];
 
@@ -207,13 +208,17 @@ impl PositionsMonitor {
                                 _ => panic!("Checked"),
                             };
                         let position = position.into_active();
-                        let wallet_pnl = pnls_by_wallet_ids.get_mut(&position.order.wallet_id);
 
-                        if let Some(wallet_pnl) = wallet_pnl {
-                            *wallet_pnl += position.current_pnl;
-                        } else {
-                            pnls_by_wallet_ids
-                                .insert(position.order.wallet_id.clone(), position.current_pnl);
+                        if position.order.top_up_enabled {
+                            let wallet_pnl =
+                                top_up_pnls_by_wallet_ids.get_mut(&position.order.wallet_id);
+
+                            if let Some(wallet_pnl) = wallet_pnl {
+                                *wallet_pnl += position.current_pnl;
+                            } else {
+                                top_up_pnls_by_wallet_ids
+                                    .insert(position.order.wallet_id.clone(), position.current_pnl);
+                            }
                         }
 
                         events.push(PositionMonitoringEvent::PositionActivated(position.clone()));
@@ -276,13 +281,16 @@ impl PositionsMonitor {
 
                         false // remove closed position
                     } else {
-                        let wallet_pnl = pnls_by_wallet_ids.get_mut(&position.order.wallet_id);
+                        if position.order.top_up_enabled {
+                            let wallet_pnl =
+                                top_up_pnls_by_wallet_ids.get_mut(&position.order.wallet_id);
 
-                        if let Some(wallet_pnl) = wallet_pnl {
-                            *wallet_pnl += position.current_pnl;
-                        } else {
-                            pnls_by_wallet_ids
-                                .insert(position.order.wallet_id.clone(), position.current_pnl);
+                            if let Some(wallet_pnl) = wallet_pnl {
+                                *wallet_pnl += position.current_pnl;
+                            } else {
+                                top_up_pnls_by_wallet_ids
+                                    .insert(position.order.wallet_id.clone(), position.current_pnl);
+                            }
                         }
 
                         true // no need to do anything with position
@@ -296,7 +304,7 @@ impl PositionsMonitor {
         }
 
         self.update_wallet_balances(bidask);
-        let wallet_events = self.update_wallet_pnls(bidask, pnls_by_wallet_ids);
+        let wallet_events = self.update_wallet_pnls(bidask, top_up_pnls_by_wallet_ids);
 
         for event in wallet_events.into_iter() {
             events.push(event);

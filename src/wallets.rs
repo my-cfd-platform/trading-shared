@@ -15,7 +15,7 @@ pub struct Wallet {
     balances_by_instruments: AHashMap<String, WalletBalance>,
     estimated_amounts_by_balance_id: AHashMap<String, f64>,
     estimated_prices_by_balance_id: AHashMap<String, f64>,
-    pnls_by_instruments: AHashMap<String, f64>,
+    top_up_pnls_by_instruments: AHashMap<String, f64>,
 }
 
 impl Wallet {
@@ -36,7 +36,7 @@ impl Wallet {
             margin_call_percent,
             current_loss_percent: 0.0,
             prev_loss_percent: 0.0,
-            pnls_by_instruments: Default::default(),
+            top_up_pnls_by_instruments: Default::default(),
         }
     }
 
@@ -45,17 +45,17 @@ impl Wallet {
     }
 
     pub fn set_instrument_pnl(&mut self, instrument: &str, instrument_pnl: f64) {
-        let pnl = self.pnls_by_instruments.get_mut(instrument);
+        let pnl = self.top_up_pnls_by_instruments.get_mut(instrument);
 
         if let Some(pnl) = pnl {
             *pnl = instrument_pnl;
         } else {
-            self.pnls_by_instruments.insert(instrument.to_string(), instrument_pnl);
+            self.top_up_pnls_by_instruments.insert(instrument.to_string(), instrument_pnl);
         }
     }
 
     pub fn deduct_instrument_pnl(&mut self, instrument: &str, instrument_pnl: f64) {
-        let pnl = self.pnls_by_instruments.get_mut(instrument);
+        let pnl = self.top_up_pnls_by_instruments.get_mut(instrument);
 
         if let Some(pnl) = pnl {
             *pnl -= instrument_pnl;
@@ -63,17 +63,17 @@ impl Wallet {
     }
 
     pub fn add_instrument_pnl(&mut self, instrument: &str, instrument_pnl: f64) {
-        let pnl = self.pnls_by_instruments.get_mut(instrument);
+        let pnl = self.top_up_pnls_by_instruments.get_mut(instrument);
 
         if let Some(pnl) = pnl {
             *pnl += instrument_pnl;
         } else {
-            self.pnls_by_instruments.insert(instrument.to_string(), instrument_pnl);
+            self.top_up_pnls_by_instruments.insert(instrument.to_string(), instrument_pnl);
         }
     }
 
     pub fn calc_pnl(&self) -> f64 {
-        self.pnls_by_instruments.iter().map(|(_, pnl)| pnl).sum()
+        self.top_up_pnls_by_instruments.iter().map(|(_, pnl)| pnl).sum()
     }
 
     pub fn update_loss(&mut self) {
