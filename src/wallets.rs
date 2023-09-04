@@ -66,10 +66,11 @@ impl Wallet {
             self.total_top_up_reserved_balance -= *old_reserved;
             *old_reserved = new_reserved;
         } else {
-            self.total_top_up_reserved_balance += new_reserved;
             self.top_up_reserved_balance_by_instruments
                 .insert(instrument.to_string(), new_reserved);
         }
+
+        self.total_top_up_reserved_balance += new_reserved;
     }
 
     pub fn get_instruments(&self) -> Vec<&String> {
