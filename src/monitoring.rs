@@ -37,8 +37,8 @@ impl PositionsMonitor {
         }
     }
 
-    pub fn get_wallet(&self, wallet_id: &str) -> Option<&Wallet> {
-        let wallet = self.wallets_by_ids.get(wallet_id);
+    pub fn get_wallet_mut(&mut self, wallet_id: &str) -> Option<&Wallet> {
+        let wallet = self.wallets_by_ids.get_mut(wallet_id);
 
         if let Some(wallet) = wallet {
             return Some(wallet);
