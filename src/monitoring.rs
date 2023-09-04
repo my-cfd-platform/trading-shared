@@ -1,10 +1,11 @@
-use crate::top_ups::CanceledTopUp;
+use crate::top_ups::{ActiveTopUp, CanceledTopUp};
 use crate::wallets::{Wallet, WalletBalance};
 use crate::{
     caches::PositionsCache,
     positions::{ActivePosition, BidAsk, ClosedPosition, Position},
 };
 use ahash::{AHashMap, AHashSet};
+use std::collections::HashMap;
 use std::time::Duration;
 
 pub struct PositionsMonitor {
@@ -69,7 +70,7 @@ impl PositionsMonitor {
                         let wallet = self.wallets_by_ids.get_mut(&position.order.wallet_id);
 
                         if let Some(wallet) = wallet {
-                            wallet.deduct_instrument_pnl(
+                            wallet.deduct_top_up_pnl(
                                 &position.order.instrument,
                                 position.current_pnl,
                             );
@@ -161,10 +162,29 @@ impl PositionsMonitor {
         self.positions_cache.get_by_wallet_id(wallet_id)
     }
 
-    pub fn unlock(&mut self, position: Position) {
-        self.locked_ids.remove(position.get_id());
-        self.positions_cache.remove(position.get_id());
-        self.add(position);
+    pub fn unlock(&mut self, position_id: &str) {
+        self.locked_ids.remove(position_id);
+    }
+
+    pub fn add_top_up(
+        &mut self,
+        position: &ActivePosition,
+        top_up: ActiveTopUp,
+    ) -> Result<(), String> {
+        let position = self.positions_cache.get_mut(&position.id);
+
+        let Some(position) = position else {
+            return Err("Position not found".to_string());
+        };
+
+        match position {
+            Position::Active(position) => {
+                position.add_top_up(top_up);
+                Ok(())
+            }
+            Position::Closed(_) => Err("Can't add top-up to closed position ".to_string()),
+            Position::Pending(_) => Err("Can't add top-up to pending position".to_string()),
+        }
     }
 
     pub fn get_mut(&mut self, id: &str) -> Option<&mut Position> {
@@ -180,8 +200,10 @@ impl PositionsMonitor {
 
         let mut events = Vec::with_capacity(position_ids.len());
         let mut top_up_pnls_by_wallet_ids: AHashMap<String, f64> =
-            AHashMap::with_capacity(position_ids.len());
-        let mut wallet_ids_to_remove = vec![];
+            AHashMap::with_capacity(position_ids.len() / 2);
+        let mut wallet_ids_to_remove = Vec::with_capacity(position_ids.len() / 3);
+        let mut top_up_reserved_by_wallet_ids: AHashMap<String, HashMap<String, f64>> =
+            AHashMap::with_capacity(position_ids.len() / 2);
 
         position_ids.retain(|position_id| {
             if self.locked_ids.contains(position_id) {
@@ -218,6 +240,7 @@ impl PositionsMonitor {
                         let position = position.into_active();
 
                         if position.order.top_up_enabled {
+                            // calc pnl
                             let wallet_pnl =
                                 top_up_pnls_by_wallet_ids.get_mut(&position.order.wallet_id);
 
@@ -227,13 +250,37 @@ impl PositionsMonitor {
                                 top_up_pnls_by_wallet_ids
                                     .insert(position.order.wallet_id.clone(), position.current_pnl);
                             }
+
+                            // calc reserved amounts
+                            let reserved_by_assets =
+                                top_up_reserved_by_wallet_ids.get_mut(&position.order.wallet_id);
+
+                            if let Some(reserved_by_assets) = reserved_by_assets {
+                                for (asset_symbol, asset_amount) in
+                                    position.order.invest_assets.iter()
+                                {
+                                    let reserved_amount = reserved_by_assets.get_mut(asset_symbol);
+
+                                    if let Some(reserved_amount) = reserved_amount {
+                                        *reserved_amount += asset_amount;
+                                    } else {
+                                        reserved_by_assets
+                                            .insert(asset_symbol.to_owned(), *asset_amount);
+                                    }
+                                }
+                            } else {
+                                top_up_reserved_by_wallet_ids.insert(
+                                    position.order.wallet_id.clone(),
+                                    position.order.invest_assets.clone(),
+                                );
+                            }
                         }
 
                         events.push(PositionMonitoringEvent::PositionActivated(position.clone()));
                         self.positions_cache.add(Position::Active(position));
                     }
 
-                    true // active position must be monitored
+                    true // pending position must be monitored
                 }
                 Position::Active(position) => {
                     position.update(bidask);
@@ -299,6 +346,30 @@ impl PositionsMonitor {
                                 top_up_pnls_by_wallet_ids
                                     .insert(position.order.wallet_id.clone(), position.current_pnl);
                             }
+
+                            // calc reserved amounts
+                            let reserved_by_assets =
+                                top_up_reserved_by_wallet_ids.get_mut(&position.order.wallet_id);
+
+                            if let Some(reserved_by_assets) = reserved_by_assets {
+                                for (asset_symbol, asset_amount) in
+                                    position.order.invest_assets.iter()
+                                {
+                                    let reserved_amount = reserved_by_assets.get_mut(asset_symbol);
+
+                                    if let Some(reserved_amount) = reserved_amount {
+                                        *reserved_amount += asset_amount;
+                                    } else {
+                                        reserved_by_assets
+                                            .insert(asset_symbol.to_owned(), *asset_amount);
+                                    }
+                                }
+                            } else {
+                                top_up_reserved_by_wallet_ids.insert(
+                                    position.order.wallet_id.clone(),
+                                    position.order.invest_assets.clone(),
+                                );
+                            }
                         }
 
                         true // no need to do anything with position
@@ -311,7 +382,8 @@ impl PositionsMonitor {
             self.remove_wallet(&wallet_id);
         }
 
-        self.update_wallet_balances(bidask);
+        self.update_wallet_prices(bidask);
+        self.update_wallet_reserved(bidask, &top_up_reserved_by_wallet_ids);
         let wallet_events = self.update_wallet_pnls(bidask, top_up_pnls_by_wallet_ids);
 
         for event in wallet_events.into_iter() {
@@ -321,7 +393,7 @@ impl PositionsMonitor {
         events
     }
 
-    fn update_wallet_balances(&mut self, bidask: &BidAsk) {
+    fn update_wallet_prices(&mut self, bidask: &BidAsk) {
         let wallet_ids = self.wallet_ids_by_instruments.get_mut(&bidask.instrument);
 
         if let Some(wallet_ids) = wallet_ids {
@@ -332,6 +404,22 @@ impl PositionsMonitor {
                     .expect("invalid wallet add");
                 wallet.update_price(bidask);
             }
+        }
+    }
+
+    fn update_wallet_reserved(
+        &mut self,
+        bidask: &BidAsk,
+        reserved_by_wallet_ids: &AHashMap<String, HashMap<String, f64>>,
+    ) {
+        for (wallet_id, reserved_by_assets) in reserved_by_wallet_ids {
+            let wallet = self.wallets_by_ids.get_mut(wallet_id);
+
+            let Some(wallet) = wallet else {
+                continue;
+            };
+
+            wallet.set_top_up_reserved(&bidask.instrument, reserved_by_assets);
         }
     }
 
@@ -349,7 +437,7 @@ impl PositionsMonitor {
                 continue;
             };
 
-            wallet.set_instrument_pnl(&bidask.instrument, pnl);
+            wallet.set_top_up_pnl(&bidask.instrument, pnl);
             wallet.update_loss();
 
             if wallet.is_margin_call() {

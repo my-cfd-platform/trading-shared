@@ -149,6 +149,7 @@ mod tests {
         positions::{BidAsk, Position},
     };
     use std::collections::HashMap;
+    use ahash::AHashMap;
 
     #[test]
     fn positions_cache_is_empty() {
@@ -206,7 +207,7 @@ mod tests {
             created_date: DateTimeAsMicroseconds::now(),
             desire_price: None,
             funding_fee_period: None,
-            invest_assets: HashMap::from([invest_asset]),
+            invest_assets: AHashMap::from([invest_asset]),
             leverage: 1.0,
             side: crate::orders::OrderSide::Buy,
             take_profit: None,
