@@ -156,6 +156,47 @@ impl Wallet {
         Ok(())
     }
 
+    pub fn set_balance_lock(&mut self, balance_id: &str, is_locked: bool) -> Result<(), String> {
+        let inner_balance = self
+            .balances_by_instruments
+            .values_mut()
+            .find(|b| b.id == balance_id);
+
+        let Some(balance) = inner_balance else {
+            return Err("Balance not found".to_string());
+        };
+
+        if balance.is_locked == is_locked {
+            return Ok(()); // no changes no need to do anything
+        }
+
+        if !balance.is_locked && is_locked {
+            // deduct balance
+            let estimate_amount = self
+                .estimated_amounts_by_balance_id
+                .get_mut(&balance.id)
+                .expect("invalid add");
+            self.total_balance -= *estimate_amount;
+            *estimate_amount = 0.0;
+        } else if balance.is_locked && !is_locked {
+            // add balance
+            let price = self
+                .prices_by_assets
+                .get(&balance.asset_symbol)
+                .expect("invalid add");
+            let estimate_amount = self
+                .estimated_amounts_by_balance_id
+                .get_mut(&balance.id)
+                .expect("invalid add");
+            *estimate_amount = balance.asset_amount * price;
+            self.total_balance *= *estimate_amount;
+        }
+
+        balance.is_locked = is_locked;
+
+        Ok(())
+    }
+
     pub fn update_price(&mut self, bid_ask: &BidAsk) {
         let balance = self.balances_by_instruments.get(&bid_ask.instrument);
 
