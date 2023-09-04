@@ -50,7 +50,8 @@ impl Wallet {
         if let Some(pnl) = pnl {
             *pnl = instrument_pnl;
         } else {
-            self.top_up_pnls_by_instruments.insert(instrument.to_string(), instrument_pnl);
+            self.top_up_pnls_by_instruments
+                .insert(instrument.to_string(), instrument_pnl);
         }
     }
 
@@ -68,12 +69,16 @@ impl Wallet {
         if let Some(pnl) = pnl {
             *pnl += instrument_pnl;
         } else {
-            self.top_up_pnls_by_instruments.insert(instrument.to_string(), instrument_pnl);
+            self.top_up_pnls_by_instruments
+                .insert(instrument.to_string(), instrument_pnl);
         }
     }
 
     pub fn calc_pnl(&self) -> f64 {
-        self.top_up_pnls_by_instruments.iter().map(|(_, pnl)| pnl).sum()
+        self.top_up_pnls_by_instruments
+            .iter()
+            .map(|(_, pnl)| pnl)
+            .sum()
     }
 
     pub fn update_loss(&mut self) {
@@ -110,18 +115,21 @@ impl Wallet {
             balance.asset_amount * price
         };
 
-        self.estimated_amounts_by_balance_id
-            .insert(balance.id.clone(), estimate_amount);
+        if !balance.is_locked {
+            self.estimated_amounts_by_balance_id
+                .insert(balance.id.clone(), estimate_amount);
+            self.total_balance += estimate_amount;
+        } else {
+            self.estimated_amounts_by_balance_id
+                .insert(balance.id.clone(), 0.0);
+        }
+
         self.balances_by_instruments.insert(instrument_id, balance);
-        self.total_balance += estimate_amount;
 
         Ok(())
     }
 
-    pub fn update_balance(
-        &mut self,
-        balance: WalletBalance,
-    ) -> Result<(), String> {
+    pub fn update_balance(&mut self, balance: WalletBalance) -> Result<(), String> {
         let id = BidAsk::generate_id(&balance.asset_symbol, &self.estimate_asset);
         let inner_balance = self.balances_by_instruments.remove(&id);
 
@@ -129,11 +137,20 @@ impl Wallet {
             return Err("Balance not found".to_string());
         };
 
-        let price = self.prices_by_assets.get(&inner_balance.asset_symbol).expect("invalid add");
-        let estimate_amount = self.estimated_amounts_by_balance_id.get_mut(&balance.id).expect("invalid add");
-        self.total_balance -= *estimate_amount;
-        *estimate_amount = balance.asset_amount * price;
-        self.total_balance *= *estimate_amount;
+        if !balance.is_locked {
+            let price = self
+                .prices_by_assets
+                .get(&inner_balance.asset_symbol)
+                .expect("invalid add");
+            let estimate_amount = self
+                .estimated_amounts_by_balance_id
+                .get_mut(&balance.id)
+                .expect("invalid add");
+            self.total_balance -= *estimate_amount;
+            *estimate_amount = balance.asset_amount * price;
+            self.total_balance *= *estimate_amount;
+        }
+
         self.balances_by_instruments.insert(id, balance);
 
         Ok(())
@@ -165,4 +182,5 @@ pub struct WalletBalance {
     pub id: String,
     pub asset_symbol: String,
     pub asset_amount: f64,
+    pub is_locked: bool,
 }
