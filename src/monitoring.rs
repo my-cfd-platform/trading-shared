@@ -37,7 +37,7 @@ impl PositionsMonitor {
         }
     }
 
-    pub fn get_wallet_mut(&mut self, wallet_id: &str) -> Option<&Wallet> {
+    pub fn get_wallet_mut(&mut self, wallet_id: &str) -> Option<&mut Wallet> {
         let wallet = self.wallets_by_ids.get_mut(wallet_id);
 
         if let Some(wallet) = wallet {
@@ -92,7 +92,7 @@ impl PositionsMonitor {
         position
     }
 
-    pub fn remove_wallet(&mut self, wallet_id: &str) {
+    pub fn remove_wallet(&mut self, wallet_id: &str) -> Option<Wallet> {
         let wallet = self.wallets_by_ids.remove(wallet_id);
 
         if let Some(wallet) = wallet {
@@ -103,7 +103,11 @@ impl PositionsMonitor {
                     wallet_ids.remove(wallet_id);
                 }
             }
+
+            return Some(wallet);
         }
+
+        None
     }
 
     pub fn add_wallet(&mut self, wallet: Wallet) {
