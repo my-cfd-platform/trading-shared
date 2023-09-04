@@ -207,7 +207,7 @@ mod tests {
             created_date: DateTimeAsMicroseconds::now(),
             desire_price: None,
             funding_fee_period: None,
-            invest_assets: AHashMap::from([invest_asset]),
+            invest_assets: HashMap::from([invest_asset]),
             leverage: 1.0,
             side: crate::orders::OrderSide::Buy,
             take_profit: None,
