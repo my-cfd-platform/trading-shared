@@ -14,7 +14,6 @@ pub struct Wallet {
     prev_loss_percent: f64,
     estimate_asset: String,
     balances_by_instruments: AHashMap<String, WalletBalance>,
-    estimated_amounts_by_balance_id: AHashMap<String, f64>,
     prices_by_assets: AHashMap<String, f64>,
     top_up_pnls_by_instruments: AHashMap<String, f64>,
     top_up_reserved_balance_by_instruments: AHashMap<String, f64>,
@@ -34,7 +33,6 @@ impl Wallet {
             total_unlocked_balance: 0.0,
             estimate_asset: estimate_asset.into(),
             balances_by_instruments: Default::default(),
-            estimated_amounts_by_balance_id: Default::default(),
             prices_by_assets: Default::default(),
             margin_call_percent,
             current_loss_percent: 0.0,
@@ -131,24 +129,13 @@ impl Wallet {
             return Err(format!("BidAsk instrument must be {}", instrument_id));
         }
 
-        let estimate_amount = if balance.asset_symbol == self.estimate_asset {
-            self.prices_by_assets
-                .insert(balance.asset_symbol.clone(), 1.0);
-            balance.asset_amount
-        } else {
-            let price = bid_ask.get_asset_price(&balance.asset_symbol, &OrderSide::Sell);
-            self.prices_by_assets
-                .insert(balance.asset_symbol.clone(), price);
-            balance.asset_amount * price
-        };
+        let price = bid_ask.get_asset_price(&balance.asset_symbol, &OrderSide::Sell);
+        self.prices_by_assets
+            .insert(balance.asset_symbol.clone(), price);
+        let estimate_amount = balance.asset_amount * price;
 
         if !balance.is_locked {
-            self.estimated_amounts_by_balance_id
-                .insert(balance.id.clone(), estimate_amount);
             self.total_unlocked_balance += estimate_amount;
-        } else {
-            self.estimated_amounts_by_balance_id
-                .insert(balance.id.clone(), 0.0);
         }
 
         self.balances_by_instruments.insert(instrument_id, balance);
@@ -169,13 +156,8 @@ impl Wallet {
                 .prices_by_assets
                 .get(&inner_balance.asset_symbol)
                 .expect("invalid add");
-            let estimate_amount = self
-                .estimated_amounts_by_balance_id
-                .get_mut(&balance.id)
-                .expect("invalid add");
-            self.total_unlocked_balance -= *estimate_amount;
-            *estimate_amount = balance.asset_amount * price;
-            self.total_unlocked_balance *= *estimate_amount;
+            self.total_unlocked_balance -= inner_balance.asset_amount * price;
+            self.total_unlocked_balance += balance.asset_amount * price;
         }
 
         self.balances_by_instruments.insert(id, balance);
@@ -197,26 +179,15 @@ impl Wallet {
             return Ok(()); // no changes no need to do anything
         }
 
+        let price = self
+            .prices_by_assets
+            .get(&balance.asset_symbol)
+            .expect("invalid add");
+
         if !balance.is_locked && is_locked {
-            // deduct balance
-            let estimate_amount = self
-                .estimated_amounts_by_balance_id
-                .get_mut(&balance.id)
-                .expect("invalid add");
-            self.total_unlocked_balance -= *estimate_amount;
-            *estimate_amount = 0.0;
+            self.total_unlocked_balance -= balance.asset_amount * price;
         } else if balance.is_locked && !is_locked {
-            // add balance
-            let price = self
-                .prices_by_assets
-                .get(&balance.asset_symbol)
-                .expect("invalid add");
-            let estimate_amount = self
-                .estimated_amounts_by_balance_id
-                .get_mut(&balance.id)
-                .expect("invalid add");
-            *estimate_amount = balance.asset_amount * price;
-            self.total_unlocked_balance *= *estimate_amount;
+            self.total_unlocked_balance += balance.asset_amount * price;
         }
 
         balance.is_locked = is_locked;
@@ -228,19 +199,18 @@ impl Wallet {
         let balance = self.balances_by_instruments.get(&bid_ask.instrument);
 
         if let Some(balance) = balance {
-            let estimate_balance_amount = self
-                .estimated_amounts_by_balance_id
-                .get_mut(&balance.id)
-                .expect("invalid add or update");
-            self.total_unlocked_balance -= *estimate_balance_amount;
-            let price = bid_ask.get_asset_price(&balance.asset_symbol, &OrderSide::Sell);
-            *estimate_balance_amount = balance.asset_amount * price;
-            self.total_unlocked_balance += *estimate_balance_amount;
-            let estimate_price = self
+            let new_price = bid_ask.get_asset_price(&balance.asset_symbol, &OrderSide::Sell);
+            let old_price = self
                 .prices_by_assets
                 .get_mut(&balance.asset_symbol)
                 .expect("invalid add or update");
-            *estimate_price = price;
+
+            if balance.is_locked {
+                self.total_unlocked_balance -= balance.asset_amount * *old_price;
+                self.total_unlocked_balance += balance.asset_amount * new_price;
+            }
+
+            *old_price = new_price;
         }
     }
 }
