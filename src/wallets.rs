@@ -17,7 +17,7 @@ pub struct Wallet {
     prices_by_assets: AHashMap<String, f64>,
     top_up_pnls_by_instruments: AHashMap<String, f64>,
     top_up_reserved_balance_by_instruments: AHashMap<String, f64>,
-    total_top_up_reserved_balance: f64,
+    pub total_top_up_reserved_balance: f64,
 }
 
 impl Wallet {
@@ -58,13 +58,17 @@ impl Wallet {
             }
         }
 
-        let inner_reserved = self
+        let old_reserved = self
             .top_up_reserved_balance_by_instruments
             .get_mut(instrument);
 
-        if let Some(inner_reserved) = inner_reserved {
-            self.total_top_up_reserved_balance -= *inner_reserved;
-            *inner_reserved = new_reserved;
+        if let Some(old_reserved) = old_reserved {
+            self.total_top_up_reserved_balance -= *old_reserved;
+            *old_reserved = new_reserved;
+        } else {
+            self.total_top_up_reserved_balance += new_reserved;
+            self.top_up_reserved_balance_by_instruments
+                .insert(instrument.to_string(), new_reserved);
         }
     }
 
