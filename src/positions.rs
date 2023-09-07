@@ -675,10 +675,10 @@ pub struct ClosedPosition {
 
 impl ClosedPosition {
     pub fn get_status(&self) -> PositionStatus {
-        if self.activate_date.is_some() {
-            PositionStatus::Filled
-        } else {
+        if self.total_invest_assets.is_empty() {
             PositionStatus::Canceled
+        } else {
+            PositionStatus::Filled
         }
     }
 }
