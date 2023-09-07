@@ -185,6 +185,7 @@ impl Order {
         ActivePosition {
             id,
             open_date: now,
+            open_price: bidask.get_open_price(&self.side),
             open_asset_prices: asset_prices.to_owned(),
             activate_price: bidask.get_open_price(&self.side),
             activate_date: now,
@@ -211,6 +212,7 @@ impl Order {
 
         PendingPosition {
             id,
+            open_price: bidask.get_open_price(&self.side),
             open_date: now,
             open_asset_prices: asset_prices.to_owned(),
             current_asset_prices: asset_prices.to_owned(),

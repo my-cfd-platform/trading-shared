@@ -149,7 +149,6 @@ mod tests {
         positions::{BidAsk, Position},
     };
     use std::collections::HashMap;
-    use ahash::AHashMap;
 
     #[test]
     fn positions_cache_is_empty() {

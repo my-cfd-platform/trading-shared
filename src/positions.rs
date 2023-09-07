@@ -178,6 +178,7 @@ pub enum PositionStatus {
 pub struct PendingPosition {
     pub id: String,
     pub order: Order,
+    pub open_price: f64,
     pub open_date: DateTimeAsMicroseconds,
     pub open_asset_prices: HashMap<String, f64>,
     pub current_price: f64,
@@ -197,8 +198,31 @@ impl PendingPosition {
             panic!("PendingPosition without desire price");
         };
 
-        self.current_price >= desired_price && self.order.side == OrderSide::Sell
-            || self.current_price <= desired_price && self.order.side == OrderSide::Buy
+        let is_limit_sell = self.order.side == OrderSide::Sell && self.open_price <= desired_price;
+
+        if is_limit_sell && self.current_price >= desired_price {
+            return true;
+        }
+
+        let is_limit_buy = self.order.side == OrderSide::Buy && self.open_price >= desired_price;
+
+        if is_limit_buy && self.current_price <= desired_price {
+            return true;
+        }
+
+        let is_stop_sell = self.order.side == OrderSide::Sell && self.open_price >= desired_price;
+
+        if is_stop_sell && self.current_price >= desired_price {
+            return true;
+        }
+
+        let is_stop_buy = self.order.side == OrderSide::Buy && self.open_price <= desired_price;
+
+        if is_stop_buy && self.current_price <= desired_price {
+            return true;
+        }
+
+        false
     }
 
     fn try_update_instrument_price(&mut self, bidask: &BidAsk) {
@@ -241,6 +265,7 @@ impl PendingPosition {
 
         ActivePosition {
             id: self.id,
+            open_price: self.open_price,
             open_date: self.open_date,
             open_asset_prices: self.open_asset_prices,
             activate_price: self.current_price,
@@ -274,6 +299,7 @@ impl PendingPosition {
         ClosedPosition {
             pnl: None,
             asset_pnls: HashMap::new(),
+            open_price: self.open_price,
             open_date: self.open_date,
             open_asset_prices: self.open_asset_prices,
             activate_date: None,
@@ -295,6 +321,7 @@ impl PendingPosition {
 pub struct ActivePosition {
     pub id: String,
     pub order: Order,
+    pub open_price: f64,
     pub open_date: DateTimeAsMicroseconds,
     pub open_asset_prices: HashMap<String, f64>,
     pub activate_price: f64,
@@ -401,6 +428,7 @@ impl ActivePosition {
             total_invest_assets: self.calculate_total_invest_assets(),
             pnl: Some(pnl),
             asset_pnls,
+            open_price: self.open_price,
             open_date: self.open_date,
             open_asset_prices: self.open_asset_prices,
             activate_date: Some(self.activate_date),
@@ -672,6 +700,7 @@ impl ActivePosition {
 pub struct ClosedPosition {
     pub id: String,
     pub order: Order,
+    pub open_price: f64,
     pub open_date: DateTimeAsMicroseconds,
     pub open_asset_prices: HashMap<String, f64>,
     pub activate_price: Option<f64>,
@@ -817,6 +846,7 @@ mod tests {
 
         ActivePosition {
             id: Position::generate_id(),
+            open_price: bidask.get_open_price(&order.side),
             open_date: now,
             open_asset_prices: asset_prices.to_owned(),
             activate_price: bidask.get_open_price(&order.side),
