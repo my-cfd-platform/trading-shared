@@ -237,7 +237,7 @@ impl PositionsMonitor {
                                 Position::Pending(position) => position,
                                 _ => panic!("Checked"),
                             };
-                        let mut position = position.into_active();
+                        let mut position = position.activate();
                         position.update(bidask);
 
                         if position.order.top_up_enabled {

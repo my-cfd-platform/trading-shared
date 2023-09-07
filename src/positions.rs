@@ -252,13 +252,13 @@ impl PendingPosition {
 
     pub fn try_activate(self) -> Position {
         if self.can_activate() {
-            return Position::Active(self.into_active());
+            return Position::Active(self.activate());
         }
 
         Position::Pending(self)
     }
 
-    pub fn into_active(self) -> ActivePosition {
+    pub fn activate(self) -> ActivePosition {
         if !self.can_activate() {
             panic!("Can't activate");
         }
