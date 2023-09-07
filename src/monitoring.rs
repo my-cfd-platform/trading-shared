@@ -276,7 +276,16 @@ impl PositionsMonitor {
                             }
                         }
 
-                        events.push(PositionMonitoringEvent::PositionActivated(position.clone()));
+                        if position.total_invest_assets.is_empty() {
+                            self.locked_ids.insert(position.id.clone());
+                            let lock_reason =
+                                PositionLockReason::PositionActivated(position.clone());
+                            events.push(PositionMonitoringEvent::PositionLocked(lock_reason));
+                        } else {
+                            events
+                                .push(PositionMonitoringEvent::PositionActivated(position.clone()));
+                        }
+
                         self.positions_cache.add(Position::Active(position));
                     }
 
@@ -457,16 +466,27 @@ impl PositionsMonitor {
 }
 
 pub enum PositionMonitoringEvent {
+    /// Active position was closed due to stop-out and removed from cache
     PositionClosed(ClosedPosition),
+    /// Pending position with already reserved assets was activated due to price
+    /// and re-added as active position to cache
     PositionActivated(ActivePosition),
+    /// Active position has margin call
     PositionMarginCall(ActivePosition),
+    /// Active position was locked with inner reason
     PositionLocked(PositionLockReason),
+    /// Wallet has margin call
     WalletMarginCall(WalletMarginCallInfo),
 }
 
 pub enum PositionLockReason {
+    /// Active position needs to add a top-up
     TopUp(ActivePosition),
+    /// Active position needs to cancel the top-ups
     TopUpsCanceled((ActivePosition, Vec<CanceledTopUp>)),
+    /// Pending position without reserved assets was activated due to price,
+    /// re-added as active position to cache and needs to reserve assets
+    PositionActivated(ActivePosition),
 }
 
 #[derive(Debug)]

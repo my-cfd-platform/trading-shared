@@ -184,6 +184,7 @@ pub struct PendingPosition {
     pub current_price: f64,
     pub current_asset_prices: HashMap<String, f64>,
     pub last_update_date: DateTimeAsMicroseconds,
+    pub total_invest_assets: HashMap<String, f64>,
 }
 
 impl PendingPosition {
@@ -280,6 +281,7 @@ impl PendingPosition {
             current_loss_percent: 0.0,
             prev_loss_percent: 0.0,
             top_up_locked: false,
+            total_invest_assets: self.total_invest_assets,
         }
     }
 
@@ -335,6 +337,7 @@ pub struct ActivePosition {
     pub current_loss_percent: f64,
     pub prev_loss_percent: f64,
     pub top_up_locked: bool,
+    pub total_invest_assets: HashMap<String, f64>,
 }
 
 impl ActivePosition {
@@ -385,6 +388,18 @@ impl ActivePosition {
                 return true;
             }
 
+            for (asset_symbol, asset_amount) in top_up.assets.iter() {
+                let invested_amount = self
+                    .total_invest_assets
+                    .get_mut(asset_symbol)
+                    .expect("must exist: invalid top-up add");
+                *invested_amount -= asset_amount;
+
+                if *invested_amount <= 0.0 {
+                    self.total_invest_assets.remove(asset_symbol);
+                }
+            }
+
             canceled_top_ups.push(top_up.to_owned().cancel(self.current_price));
 
             false
@@ -400,7 +415,7 @@ impl ActivePosition {
     }
 
     fn try_update_asset_price(&mut self, bidask: &BidAsk) {
-        for asset in self.calculate_total_invest_assets().keys() {
+        for asset in self.total_invest_assets.keys() {
             let id = BidAsk::generate_id(asset, &self.order.base_asset);
 
             if id == bidask.instrument {
@@ -417,17 +432,17 @@ impl ActivePosition {
     }
 
     pub fn close(self, reason: ClosePositionReason, pnl_accuracy: Option<u32>) -> ClosedPosition {
-        let asset_pnls = self.calculate_total_asset_pnls(pnl_accuracy);
-        let mut pnl = calculate_total_amount(&asset_pnls, &self.current_asset_prices);
+        let pnls_by_assets = self.calculate_pnls_by_assets(pnl_accuracy);
+        let mut total_pnl = calculate_total_amount(&pnls_by_assets, &self.current_asset_prices);
 
         if let Some(pnl_accuracy) = pnl_accuracy {
-            pnl = floor(pnl, pnl_accuracy);
+            total_pnl = floor(total_pnl, pnl_accuracy);
         }
 
         ClosedPosition {
-            total_invest_assets: self.calculate_total_invest_assets(),
-            pnl: Some(pnl),
-            asset_pnls,
+            total_invest_assets: self.total_invest_assets,
+            pnl: Some(total_pnl),
+            asset_pnls: pnls_by_assets,
             open_price: self.open_price,
             open_date: self.open_date,
             open_asset_prices: self.open_asset_prices,
@@ -518,7 +533,7 @@ impl ActivePosition {
     }
 
     /// Calculates total asset amounts invested to position. Including order and all active top-ups
-    pub fn calculate_total_invest_assets(&self) -> HashMap<String, f64> {
+    pub fn _calculate_total_invest_assets(&self) -> HashMap<String, f64> {
         let mut amounts = HashMap::with_capacity(self.order.invest_assets.len() + 5);
 
         for (asset, amount) in self.order.invest_assets.iter() {
@@ -550,14 +565,14 @@ impl ActivePosition {
             panic!("Position top-up is not possible")
         }
 
-        let asset_amounts = self.calculate_total_invest_assets();
-        let total_amount = calculate_total_amount(&asset_amounts, &self.current_asset_prices);
+        let total_amount =
+            calculate_total_amount(&self.total_invest_assets, &self.current_asset_prices);
 
         total_amount * self.order.top_up_percent / 100.0
     }
 
     /// Calculates total top-up amount in base asset by position
-    pub fn calculate_active_top_ups_amount(&self, asset_prices: &HashMap<String, f64>) -> f64 {
+    pub fn _calculate_active_top_ups_amount(&self, asset_prices: &HashMap<String, f64>) -> f64 {
         let mut top_ups_amount = 0.0;
 
         for top_up in self.top_ups.iter() {
@@ -577,101 +592,44 @@ impl ActivePosition {
         }
     }
 
-    /// Calculates pnl by all invested assets, includes order, and top-ups
-    pub fn calculate_total_asset_pnls(&self, pnl_accuracy: Option<u32>) -> HashMap<String, f64> {
-        let mut asset_pnls = HashMap::new();
+    pub fn calculate_pnls_by_assets(&self, pnl_accuracy: Option<u32>) -> HashMap<String, f64> {
+        let mut pnls_by_assets = HashMap::with_capacity(self.total_invest_assets.len());
 
-        for (asset, amount) in self.calculate_order_assets_pnls().into_iter() {
-            let asset_pnl = asset_pnls.get_mut(&asset);
-
-            if let Some(asset_pnl) = asset_pnl {
-                *asset_pnl += amount;
-
-                if let Some(pnl_accuracy) = pnl_accuracy {
-                    *asset_pnl = floor(*asset_pnl, pnl_accuracy);
-                };
-            } else {
-                let amount = if let Some(pnl_accuracy) = pnl_accuracy {
-                    floor(amount, pnl_accuracy)
-                } else {
-                    amount
-                };
-
-                asset_pnls.insert(asset, amount);
-            }
-        }
-
-        for (asset, amount) in self.calculate_top_ups_assets_pnls().into_iter() {
-            let asset_pnl = asset_pnls.get_mut(&asset);
-
-            if let Some(asset_pnl) = asset_pnl {
-                *asset_pnl += amount;
-
-                if let Some(pnl_accuracy) = pnl_accuracy {
-                    *asset_pnl = floor(*asset_pnl, pnl_accuracy);
-                };
-            } else {
-                let amount = if let Some(pnl_accuracy) = pnl_accuracy {
-                    floor(amount, pnl_accuracy)
-                } else {
-                    amount
-                };
-
-                asset_pnls.insert(asset, amount);
-            }
-        }
-
-        asset_pnls
-    }
-
-    /// Calculates pnl by invested assets initially in order
-    pub fn calculate_order_assets_pnls(&self) -> HashMap<String, f64> {
-        let mut pnls_by_assets = HashMap::with_capacity(self.order.invest_assets.len());
-
-        for (asset, amount) in self.order.invest_assets.iter() {
+        for (asset, amount) in self.total_invest_assets.iter() {
             let pnl = self.calculate_pnl(*amount, self.activate_price);
             let max_loss_amount = amount * -1.0; // limit for isolated trade
 
-            if pnl < max_loss_amount {
-                pnls_by_assets.insert(asset.to_owned(), max_loss_amount);
+            let mut pnl = if pnl < max_loss_amount {
+                max_loss_amount
             } else {
-                pnls_by_assets.insert(asset.to_owned(), pnl);
+                pnl
+            };
+
+            if let Some(pnl_accuracy) = pnl_accuracy {
+                pnl = floor(pnl, pnl_accuracy);
             }
-        }
 
-        pnls_by_assets
-    }
-
-    /// Calculates pnl by invested assets in top-ups
-    pub fn calculate_top_ups_assets_pnls(&self) -> HashMap<String, f64> {
-        let mut pnls_by_assets = HashMap::new();
-
-        for top_up in self.top_ups.iter() {
-            for (asset, amount) in top_up.assets.iter() {
-                let pnl = self.calculate_pnl(*amount, top_up.instrument_price);
-                let max_loss_amount = amount * -1.0; // limit for isolated trade
-                let pnl = if pnl < max_loss_amount {
-                    max_loss_amount
-                } else {
-                    pnl
-                };
-
-                let total_asset_pnl = pnls_by_assets.get_mut(asset);
-                if let Some(total_asset_pnl) = total_asset_pnl {
-                    *total_asset_pnl += pnl;
-                } else {
-                    pnls_by_assets.insert(asset.to_owned(), pnl);
-                }
-            }
+            pnls_by_assets.insert(asset.to_owned(), pnl);
         }
 
         pnls_by_assets
     }
 
     pub fn add_top_up(&mut self, top_up: ActiveTopUp) {
-        for (asset, price) in top_up.asset_prices.iter() {
+        for (asset_symbol, asset_price) in top_up.asset_prices.iter() {
             self.current_asset_prices
-                .insert(asset.to_owned(), price.to_owned());
+                .insert(asset_symbol.to_owned(), asset_price.to_owned());
+        }
+
+        for (asset_symbol, asset_amount) in top_up.assets.iter() {
+            let invested_asset_amount = self.total_invest_assets.get_mut(asset_symbol);
+
+            if let Some(invested_asset_amount) = invested_asset_amount {
+                *invested_asset_amount += asset_amount;
+            } else {
+                self.total_invest_assets
+                    .insert(asset_symbol.to_owned(), *asset_amount);
+            }
         }
 
         self.top_ups.push(top_up);
@@ -679,17 +637,15 @@ impl ActivePosition {
     }
 
     fn update_pnl(&mut self) {
-        let total_asset_pnls = self.calculate_total_asset_pnls(None);
+        let total_asset_pnls = self.calculate_pnls_by_assets(None);
         self.current_pnl = calculate_total_amount(&total_asset_pnls, &self.current_asset_prices);
         self.prev_loss_percent = self.current_loss_percent;
 
         if self.current_pnl < 0.0 {
-            let order_invest_amount = self
-                .order
-                .calculate_invest_amount(&self.current_asset_prices);
-            let top_ups_amount = self.calculate_active_top_ups_amount(&self.current_asset_prices);
+            let total_invest_amount =
+                calculate_total_amount(&self.total_invest_assets, &self.current_asset_prices);
             self.current_loss_percent =
-                calculate_percent(order_invest_amount + top_ups_amount, self.current_pnl.abs());
+                calculate_percent(total_invest_amount, self.current_pnl.abs());
         } else {
             self.current_loss_percent = 0.0;
         }
@@ -855,12 +811,13 @@ mod tests {
             current_price: bidask.get_close_price(&order.side),
             current_asset_prices: asset_prices.to_owned(),
             last_update_date: now,
-            order,
             top_ups: Vec::new(),
             current_pnl: 0.0,
             current_loss_percent: 0.0,
             prev_loss_percent: 0.0,
             top_up_locked: false,
+            total_invest_assets: order.invest_assets.clone(),
+            order,
         }
     }
 }

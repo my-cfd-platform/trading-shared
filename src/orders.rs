@@ -193,12 +193,13 @@ impl Order {
             current_price: bidask.get_close_price(&self.side),
             current_asset_prices: asset_prices.to_owned(),
             last_update_date: now,
-            order: self,
             top_ups: Vec::new(),
             current_pnl: 0.0,
             current_loss_percent: 0.0,
             prev_loss_percent: 0.0,
             top_up_locked: false,
+            total_invest_assets: self.invest_assets.clone(),
+            order: self,
         }
     }
 
@@ -219,6 +220,7 @@ impl Order {
             current_price: bidask.get_open_price(&self.side),
             last_update_date: now,
             order: self,
+            total_invest_assets: HashMap::new(),
         }
     }
 }
