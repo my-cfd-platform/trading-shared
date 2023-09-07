@@ -533,33 +533,6 @@ impl ActivePosition {
         self.current_loss_percent >= self.order.top_up_percent
     }
 
-    /// Calculates total asset amounts invested to position. Including order and all active top-ups
-    pub fn _calculate_total_invest_assets(&self) -> HashMap<String, f64> {
-        let mut amounts = HashMap::with_capacity(self.order.invest_assets.len() + 5);
-
-        for (asset, amount) in self.order.invest_assets.iter() {
-            let total_amount = amounts.get_mut(asset);
-            if let Some(total_amount) = total_amount {
-                *total_amount += amount;
-            } else {
-                amounts.insert(asset.to_owned(), amount.to_owned());
-            }
-        }
-
-        for top_up in self.top_ups.iter() {
-            for (asset, amount) in top_up.assets.iter() {
-                let total_amount = amounts.get_mut(asset);
-                if let Some(total_amount) = total_amount {
-                    *total_amount += amount;
-                } else {
-                    amounts.insert(asset.to_owned(), amount.to_owned());
-                }
-            }
-        }
-
-        amounts
-    }
-
     /// Calculates amount for next top-up in base asset
     pub fn calculate_required_top_up_amount(&self) -> f64 {
         if !self.is_top_up() {
@@ -570,17 +543,6 @@ impl ActivePosition {
             calculate_total_amount(&self.total_invest_assets, &self.current_asset_prices);
 
         total_amount * self.order.top_up_percent / 100.0
-    }
-
-    /// Calculates total top-up amount in base asset by position
-    pub fn _calculate_active_top_ups_amount(&self, asset_prices: &HashMap<String, f64>) -> f64 {
-        let mut top_ups_amount = 0.0;
-
-        for top_up in self.top_ups.iter() {
-            top_ups_amount += calculate_total_amount(&top_up.assets, asset_prices);
-        }
-
-        top_ups_amount
     }
 
     /// Calculates total pnl in base asset by position
