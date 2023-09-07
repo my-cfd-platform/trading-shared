@@ -1,3 +1,4 @@
+use crate::positions::PendingPosition;
 use crate::top_ups::{ActiveTopUp, CanceledTopUp};
 use crate::wallets::{Wallet, WalletBalance};
 use crate::{
@@ -6,6 +7,7 @@ use crate::{
 };
 use ahash::{AHashMap, AHashSet};
 use std::collections::HashMap;
+use std::future::Pending;
 use std::time::Duration;
 
 pub struct PositionsMonitor {
@@ -231,63 +233,25 @@ impl PositionsMonitor {
                 Position::Pending(position) => {
                     position.update(bidask);
 
-                    if position.can_activate() {
-                        let position =
-                            match self.positions_cache.remove(position_id).expect("Checked") {
-                                Position::Pending(position) => position,
-                                _ => panic!("Checked"),
-                            };
-                        let mut position = position.activate();
-                        position.update(bidask);
-
-                        if position.order.top_up_enabled {
-                            // calc pnl
-                            let wallet_pnl =
-                                top_up_pnls_by_wallet_ids.get_mut(&position.order.wallet_id);
-
-                            if let Some(wallet_pnl) = wallet_pnl {
-                                *wallet_pnl += position.current_pnl;
-                            } else {
-                                top_up_pnls_by_wallet_ids
-                                    .insert(position.order.wallet_id.clone(), position.current_pnl);
-                            }
-
-                            // calc reserved amounts
-                            let reserved_by_assets =
-                                top_up_reserved_by_wallet_ids.get_mut(&position.order.wallet_id);
-
-                            if let Some(reserved_by_assets) = reserved_by_assets {
-                                for (asset_symbol, asset_amount) in
-                                    position.order.invest_assets.iter()
-                                {
-                                    let reserved_amount = reserved_by_assets.get_mut(asset_symbol);
-
-                                    if let Some(reserved_amount) = reserved_amount {
-                                        *reserved_amount += asset_amount;
-                                    } else {
-                                        reserved_by_assets
-                                            .insert(asset_symbol.to_owned(), *asset_amount);
-                                    }
-                                }
-                            } else {
-                                top_up_reserved_by_wallet_ids.insert(
-                                    position.order.wallet_id.clone(),
-                                    position.order.invest_assets.clone(),
-                                );
-                            }
-                        }
-
-                        if position.total_invest_assets.is_empty() {
-                            self.locked_ids.insert(position.id.clone());
-                            let lock_reason =
-                                PositionLockReason::PositionActivated(position.clone());
-                            events.push(PositionMonitoringEvent::PositionLocked(lock_reason));
-                        } else {
+                    if position.is_price_reached() {
+                        if position.can_activate() {
+                            let position =
+                                match self.positions_cache.remove(position_id).expect("Checked") {
+                                    Position::Pending(position) => position,
+                                    _ => panic!("Checked"),
+                                };
+                            let mut position =
+                                position.activate().expect("checked by can_activate");
+                            position.update(bidask);
                             events
                                 .push(PositionMonitoringEvent::PositionActivated(position.clone()));
+                            self.positions_cache.add(Position::Active(position));
+                        } else {
+                            self.locked_ids.insert(position.id.clone());
+                            let lock_reason =
+                                PositionLockReason::ActivationPending(position.clone());
+                            events.push(PositionMonitoringEvent::PositionLocked(lock_reason));
                         }
-
-                        self.positions_cache.add(Position::Active(position));
                     }
 
                     true // pending position must be monitored
@@ -363,7 +327,7 @@ impl PositionsMonitor {
 
                             if let Some(reserved_by_assets) = reserved_by_assets {
                                 for (asset_symbol, asset_amount) in
-                                    position.order.invest_assets.iter()
+                                    position.total_invest_assets.iter()
                                 {
                                     let reserved_amount = reserved_by_assets.get_mut(asset_symbol);
 
@@ -485,9 +449,8 @@ pub enum PositionLockReason {
     TopUp(ActivePosition),
     /// Active position needs to cancel the top-ups
     TopUpsCanceled((ActivePosition, Vec<CanceledTopUp>)),
-    /// Pending position without reserved assets was activated due to price,
-    /// re-added as active position to cache and needs to reserve assets
-    PositionActivated(ActivePosition),
+    /// Pending position without reserved assets reached desire price needs to reserve assets
+    ActivationPending(PendingPosition),
 }
 
 #[derive(Debug)]

@@ -190,12 +190,12 @@ pub struct PendingPosition {
 
 impl PendingPosition {
     pub fn update(&mut self, bidask: &BidAsk) {
-        self.try_update_instrument_price(bidask);
-        self.try_update_asset_prices(bidask);
+        self.update_instrument_price(bidask);
+        self.update_asset_prices(bidask);
         self.last_update_date = DateTimeAsMicroseconds::now();
     }
 
-    pub fn can_activate(&self) -> bool {
+    pub fn is_price_reached(&self) -> bool {
         let Some(desired_price) = self.order.desire_price else {
             panic!("PendingPosition without desire price");
         };
@@ -227,13 +227,13 @@ impl PendingPosition {
         false
     }
 
-    fn try_update_instrument_price(&mut self, bidask: &BidAsk) {
+    fn update_instrument_price(&mut self, bidask: &BidAsk) {
         if self.order.instrument == bidask.instrument {
             self.current_price = bidask.get_open_price(&self.order.side)
         }
     }
 
-    fn try_update_asset_prices(&mut self, bidask: &BidAsk) {
+    fn update_asset_prices(&mut self, bidask: &BidAsk) {
         for asset in self.order.invest_assets.keys() {
             let id = BidAsk::generate_id(asset, &self.order.base_asset);
 
@@ -250,22 +250,38 @@ impl PendingPosition {
         }
     }
 
+    pub fn can_activate(&self) -> bool {
+        if self.total_invest_assets.is_empty() {
+            return false;
+        }
+
+        if !self.is_price_reached() {
+            return false;
+        }
+
+        true
+    }
+
     pub fn try_activate(self) -> Position {
         if self.can_activate() {
-            return Position::Active(self.activate());
+            return Position::Active(self.activate().expect("checked in can_activate"));
         }
 
         Position::Pending(self)
     }
 
-    pub fn activate(self) -> ActivePosition {
-        if !self.can_activate() {
-            panic!("Can't activate");
+    pub fn activate(self) -> Result<ActivePosition, String> {
+        if !self.is_price_reached() {
+            return Err("Price isn't reached".to_string());
+        }
+
+        if self.total_invest_assets.is_empty() {
+            return Err("Empty invest assets".to_string());
         }
 
         let now = DateTimeAsMicroseconds::now();
 
-        ActivePosition {
+        Ok(ActivePosition {
             id: self.id,
             open_price: self.open_price,
             open_date: self.open_date,
@@ -283,7 +299,7 @@ impl PendingPosition {
             prev_loss_percent: 0.0,
             top_up_locked: false,
             total_invest_assets: self.total_invest_assets,
-        }
+        })
     }
 
     pub fn set_take_profit(&mut self, value: Option<TakeProfitConfig>) {
