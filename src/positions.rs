@@ -19,6 +19,7 @@ pub enum ClosePositionReason {
     TakeProfit = 2,
     StopLoss = 3,
     AdminCommand = 4,
+    InsufficientBalance = 5,
 }
 
 #[derive(Clone)]
@@ -313,7 +314,7 @@ impl PendingPosition {
             close_asset_prices: self.current_asset_prices.to_owned(),
             id: self.id,
             top_ups: Vec::with_capacity(0),
-            total_invest_assets: self.order.invest_assets.clone(),
+            total_invest_assets: self.total_invest_assets,
             order: self.order,
         }
     }
