@@ -314,6 +314,18 @@ impl PendingPosition {
         self.order.desire_price = Some(value);
     }
 
+    pub fn add_invest_assets(&mut self, amounts_by_assets: &HashMap<String, f64>) {
+        for (asset_symbol, asset_amount) in amounts_by_assets {
+            let invested_asset_amount = self.total_invest_assets.get_mut(asset_symbol);
+
+            if let Some(invested_asset_amount) = invested_asset_amount {
+                *invested_asset_amount += asset_amount;
+            } else {
+                self.total_invest_assets.insert(asset_symbol.to_owned(), asset_amount.to_owned());
+            }
+        }
+    }
+
     pub fn close(self, reason: ClosePositionReason) -> ClosedPosition {
         ClosedPosition {
             pnl: None,

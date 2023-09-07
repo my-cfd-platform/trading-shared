@@ -7,7 +7,6 @@ use crate::{
 };
 use ahash::{AHashMap, AHashSet};
 use std::collections::HashMap;
-use std::future::Pending;
 use std::time::Duration;
 
 pub struct PositionsMonitor {
