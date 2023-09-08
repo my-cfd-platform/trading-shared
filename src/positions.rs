@@ -619,6 +619,32 @@ impl ActivePosition {
         }
     }
 
+    /// Calculates total asset amounts invested to position. Including order and all active top-ups
+    pub fn calc_total_invest_assets(&self) -> HashMap<String, f64> {
+        let mut amounts = HashMap::with_capacity(self.order.invest_assets.len() + 5);
+
+        for (asset, amount) in self.order.invest_assets.iter() {
+            let total_amount = amounts.get_mut(asset);
+            if let Some(total_amount) = total_amount {
+                *total_amount += amount;
+            } else {
+                amounts.insert(asset.to_owned(), amount.to_owned());
+            }
+        }
+
+        for top_up in self.top_ups.iter() {
+            for (asset, amount) in top_up.assets.iter() {
+                let total_amount = amounts.get_mut(asset);
+                if let Some(total_amount) = total_amount {
+                    *total_amount += amount;
+                } else {
+                    amounts.insert(asset.to_owned(), amount.to_owned());
+                }
+            }
+        }
+
+        amounts
+    }
 
     /// Calculates pnl by all invested assets, includes order, and top-ups
     pub fn calc_pnls_by_assets(&self, pnl_accuracy: Option<u32>) -> HashMap<String, f64> {
