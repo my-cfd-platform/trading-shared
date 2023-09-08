@@ -185,7 +185,7 @@ pub struct PendingPosition {
     pub current_price: f64,
     pub current_asset_prices: HashMap<String, f64>,
     pub last_update_date: DateTimeAsMicroseconds,
-    pub reserved_assets: HashMap<String, f64>,
+    pub total_invest_assets: HashMap<String, f64>,
 }
 
 impl PendingPosition {
@@ -251,7 +251,7 @@ impl PendingPosition {
     }
 
     pub fn can_activate(&self) -> bool {
-        if self.reserved_assets.is_empty() {
+        if self.total_invest_assets.is_empty() {
             return false;
         }
 
@@ -275,13 +275,13 @@ impl PendingPosition {
             return Err("desire_price isn't reached".to_string());
         }
 
-        if self.reserved_assets.is_empty() {
-            return Err("reserved_assets is empty".to_string());
+        if self.total_invest_assets.is_empty() {
+            return Err("total_invest_assets is empty".to_string());
         }
 
         let now = DateTimeAsMicroseconds::now();
         let mut order = self.order;
-        order.invest_assets = self.reserved_assets;
+        order.invest_assets = self.total_invest_assets;
 
         Ok(ActivePosition {
             id: self.id,
@@ -316,14 +316,14 @@ impl PendingPosition {
         self.order.desire_price = Some(value);
     }
 
-    pub fn add_reserved_assets(&mut self, amounts_by_assets: &HashMap<String, f64>) {
+    pub fn add_invest_assets(&mut self, amounts_by_assets: &HashMap<String, f64>) {
         for (asset_symbol, asset_amount) in amounts_by_assets {
-            let invested_asset_amount = self.reserved_assets.get_mut(asset_symbol);
+            let invested_asset_amount = self.total_invest_assets.get_mut(asset_symbol);
 
             if let Some(invested_asset_amount) = invested_asset_amount {
                 *invested_asset_amount += asset_amount;
             } else {
-                self.reserved_assets.insert(asset_symbol.to_owned(), asset_amount.to_owned());
+                self.total_invest_assets.insert(asset_symbol.to_owned(), asset_amount.to_owned());
             }
         }
     }
@@ -344,7 +344,7 @@ impl PendingPosition {
             close_asset_prices: self.current_asset_prices.to_owned(),
             id: self.id,
             top_ups: Vec::with_capacity(0),
-            total_invest_assets: self.reserved_assets,
+            total_invest_assets: self.total_invest_assets,
             order: self.order,
         }
     }

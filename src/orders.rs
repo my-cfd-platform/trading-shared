@@ -220,7 +220,7 @@ impl Order {
             current_price: bidask.get_open_price(&self.side),
             last_update_date: now,
             order: self,
-            reserved_assets: HashMap::with_capacity(0),
+            total_invest_assets: HashMap::with_capacity(0),
         }
     }
 }
