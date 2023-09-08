@@ -280,6 +280,8 @@ impl PendingPosition {
         }
 
         let now = DateTimeAsMicroseconds::now();
+        let mut order = self.order;
+        order.invest_assets = self.reserved_assets;
 
         Ok(ActivePosition {
             id: self.id,
@@ -289,7 +291,6 @@ impl PendingPosition {
             activate_price: self.current_price,
             activate_date: now,
             activate_asset_prices: self.current_asset_prices.to_owned(),
-            order: self.order,
             current_price: self.current_price,
             current_asset_prices: self.current_asset_prices,
             last_update_date: now,
@@ -298,7 +299,8 @@ impl PendingPosition {
             current_loss_percent: 0.0,
             prev_loss_percent: 0.0,
             top_up_locked: false,
-            total_invest_assets: self.reserved_assets,
+            total_invest_assets: order.invest_assets.clone(),
+            order,
         })
     }
 
