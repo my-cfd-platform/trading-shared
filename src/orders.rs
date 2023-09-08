@@ -181,17 +181,19 @@ impl Order {
         asset_prices: &HashMap<String, f64>,
     ) -> ActivePosition {
         let now = DateTimeAsMicroseconds::now();
+        let mut asset_prices = asset_prices.to_owned();
+        asset_prices.insert(self.base_asset.clone(), 1.0);
 
         ActivePosition {
             id,
             open_date: now,
             open_price: bidask.get_open_price(&self.side),
-            open_asset_prices: asset_prices.to_owned(),
+            open_asset_prices: asset_prices.clone(),
             activate_price: bidask.get_open_price(&self.side),
             activate_date: now,
-            activate_asset_prices: asset_prices.to_owned(),
+            activate_asset_prices: asset_prices.clone(),
             current_price: bidask.get_close_price(&self.side),
-            current_asset_prices: asset_prices.to_owned(),
+            current_asset_prices: asset_prices,
             last_update_date: now,
             top_ups: Vec::new(),
             current_pnl: 0.0,
@@ -210,17 +212,19 @@ impl Order {
         asset_prices: &HashMap<String, f64>,
     ) -> PendingPosition {
         let now = DateTimeAsMicroseconds::now();
+        let mut asset_prices = asset_prices.to_owned();
+        asset_prices.insert(self.base_asset.clone(), 1.0);
 
         PendingPosition {
             id,
             open_price: bidask.get_open_price(&self.side),
             open_date: now,
-            open_asset_prices: asset_prices.to_owned(),
-            current_asset_prices: asset_prices.to_owned(),
+            open_asset_prices: asset_prices.clone(),
+            current_asset_prices: asset_prices,
             current_price: bidask.get_open_price(&self.side),
             last_update_date: now,
             order: self,
-            total_invest_assets: HashMap::with_capacity(0),
+            total_invest_assets: HashMap::new(),
         }
     }
 }

@@ -321,9 +321,9 @@ impl PendingPosition {
         amounts_by_assets: &HashMap<String, f64>,
     ) -> Result<(), String> {
         for (asset_symbol, asset_amount) in amounts_by_assets {
-            if !self.order.invest_assets.contains_key(asset_symbol) {
+            if !self.open_asset_prices.contains_key(asset_symbol) {
                 return Err(format!(
-                    "Can't invest '{}' because it isn't in order",
+                    "Can't invest '{}': not found open price",
                     asset_symbol
                 ));
             }
