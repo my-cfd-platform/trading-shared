@@ -220,7 +220,7 @@ impl PendingPosition {
 
         let is_stop_buy = self.order.side == OrderSide::Buy && self.open_price <= desired_price;
 
-        if is_stop_buy && self.current_price <= desired_price {
+        if is_stop_buy && self.current_price >= desired_price {
             return true;
         }
 
@@ -865,6 +865,195 @@ mod tests {
             Position::Closed(position) => position,
             _ => panic!("must be closed"),
         };
+    }
+
+    #[tokio::test]
+    async fn stop_buy_not_reached() {
+        let instrument = "ATOMUSDT".to_string();
+        let prices = HashMap::from([("USDT".to_string(), 1.0)]);
+        let invest_assets = HashMap::from([("USDT".to_string(), 100342.0)]);
+        let mut order = new_order(instrument, invest_assets, 1.0, OrderSide::Buy);
+        order.desire_price = Some(26000.00);
+        let bidask = BidAsk {
+            ask: 25900.00,
+            bid: 25900.00,
+            datetime: DateTimeAsMicroseconds::now(),
+            instrument: "ATOMUSDT".to_string(),
+        };
+        let position = order.open(&bidask, &prices);
+        let Position::Pending(pending_position) = position else {
+            panic!("Must be pending position");
+        };
+
+        let is_price_reached = pending_position.is_price_reached();
+
+        assert!(!is_price_reached);
+    }
+
+    #[tokio::test]
+    async fn stop_buy_reached() {
+        let instrument = "ATOMUSDT".to_string();
+        let prices = HashMap::from([("USDT".to_string(), 1.0)]);
+        let invest_assets = HashMap::from([("USDT".to_string(), 100342.0)]);
+        let mut order = new_order(instrument, invest_assets, 1.0, OrderSide::Buy);
+        order.desire_price = Some(26000.00);
+        let bidask = BidAsk {
+            ask: 25900.00,
+            bid: 25900.00,
+            datetime: DateTimeAsMicroseconds::now(),
+            instrument: "ATOMUSDT".to_string(),
+        };
+        let position = order.open(&bidask, &prices);
+        let Position::Pending(mut pending_position) = position else {
+            panic!("Must be pending position");
+        };
+        pending_position.current_price = 26100.00;
+
+        let is_price_reached = pending_position.is_price_reached();
+
+        assert!(is_price_reached);
+    }
+
+    #[tokio::test]
+    async fn limit_buy_reached() {
+        let instrument = "ATOMUSDT".to_string();
+        let prices = HashMap::from([("USDT".to_string(), 1.0)]);
+        let invest_assets = HashMap::from([("USDT".to_string(), 100342.0)]);
+        let mut order = new_order(instrument, invest_assets, 1.0, OrderSide::Buy);
+        order.desire_price = Some(25000.00);
+        let bidask = BidAsk {
+            ask: 25900.00,
+            bid: 25900.00,
+            datetime: DateTimeAsMicroseconds::now(),
+            instrument: "ATOMUSDT".to_string(),
+        };
+        let position = order.open(&bidask, &prices);
+        let Position::Pending(mut pending_position) = position else {
+            panic!("Must be pending position");
+        };
+        pending_position.current_price = 24100.00;
+
+        let is_price_reached = pending_position.is_price_reached();
+
+        assert!(is_price_reached);
+    }
+
+    #[tokio::test]
+    async fn limit_buy_not_reached() {
+        let instrument = "ATOMUSDT".to_string();
+        let prices = HashMap::from([("USDT".to_string(), 1.0)]);
+        let invest_assets = HashMap::from([("USDT".to_string(), 100342.0)]);
+        let mut order = new_order(instrument, invest_assets, 1.0, OrderSide::Buy);
+        order.desire_price = Some(25000.00);
+        let bidask = BidAsk {
+            ask: 25900.00,
+            bid: 25900.00,
+            datetime: DateTimeAsMicroseconds::now(),
+            instrument: "ATOMUSDT".to_string(),
+        };
+        let position = order.open(&bidask, &prices);
+        let Position::Pending(mut pending_position) = position else {
+            panic!("Must be pending position");
+        };
+        pending_position.current_price = 26100.00;
+
+        let is_price_reached = pending_position.is_price_reached();
+
+        assert!(!is_price_reached);
+    }
+
+    #[tokio::test]
+    async fn limit_sell_not_reached() {
+        let instrument = "ATOMUSDT".to_string();
+        let prices = HashMap::from([("USDT".to_string(), 1.0)]);
+        let invest_assets = HashMap::from([("USDT".to_string(), 100342.0)]);
+        let mut order = new_order(instrument, invest_assets, 1.0, OrderSide::Sell);
+        order.desire_price = Some(26000.00);
+        let bidask = BidAsk {
+            ask: 25900.00,
+            bid: 25900.00,
+            datetime: DateTimeAsMicroseconds::now(),
+            instrument: "ATOMUSDT".to_string(),
+        };
+        let position = order.open(&bidask, &prices);
+        let Position::Pending(pending_position) = position else {
+            panic!("Must be pending position");
+        };
+
+        let is_price_reached = pending_position.is_price_reached();
+
+        assert!(!is_price_reached);
+    }
+
+    #[tokio::test]
+    async fn limit_sell_reached() {
+        let instrument = "ATOMUSDT".to_string();
+        let prices = HashMap::from([("USDT".to_string(), 1.0)]);
+        let invest_assets = HashMap::from([("USDT".to_string(), 100342.0)]);
+        let mut order = new_order(instrument, invest_assets, 1.0, OrderSide::Sell);
+        order.desire_price = Some(26000.00);
+        let bidask = BidAsk {
+            ask: 25900.00,
+            bid: 25900.00,
+            datetime: DateTimeAsMicroseconds::now(),
+            instrument: "ATOMUSDT".to_string(),
+        };
+        let position = order.open(&bidask, &prices);
+        let Position::Pending(mut pending_position) = position else {
+            panic!("Must be pending position");
+        };
+        pending_position.current_price = 26100.00;
+
+        let is_price_reached = pending_position.is_price_reached();
+
+        assert!(is_price_reached);
+    }
+
+    #[tokio::test]
+    async fn stop_sell_reached() {
+        let instrument = "ATOMUSDT".to_string();
+        let prices = HashMap::from([("USDT".to_string(), 1.0)]);
+        let invest_assets = HashMap::from([("USDT".to_string(), 100342.0)]);
+        let mut order = new_order(instrument, invest_assets, 1.0, OrderSide::Sell);
+        order.desire_price = Some(25000.00);
+        let bidask = BidAsk {
+            ask: 25900.00,
+            bid: 25900.00,
+            datetime: DateTimeAsMicroseconds::now(),
+            instrument: "ATOMUSDT".to_string(),
+        };
+        let position = order.open(&bidask, &prices);
+        let Position::Pending(pending_position) = position else {
+            panic!("Must be pending position");
+        };
+
+        let is_price_reached = pending_position.is_price_reached();
+
+        assert!(is_price_reached);
+    }
+
+    #[tokio::test]
+    async fn stop_sell_not_reached() {
+        let instrument = "ATOMUSDT".to_string();
+        let prices = HashMap::from([("USDT".to_string(), 1.0)]);
+        let invest_assets = HashMap::from([("USDT".to_string(), 100342.0)]);
+        let mut order = new_order(instrument, invest_assets, 1.0, OrderSide::Sell);
+        order.desire_price = Some(25000.00);
+        let bidask = BidAsk {
+            ask: 25900.00,
+            bid: 25900.00,
+            datetime: DateTimeAsMicroseconds::now(),
+            instrument: "ATOMUSDT".to_string(),
+        };
+        let position = order.open(&bidask, &prices);
+        let Position::Pending(mut pending_position) = position else {
+            panic!("Must be pending position");
+        };
+        pending_position.current_price = 24100.00;
+
+        let is_price_reached = pending_position.is_price_reached();
+
+        assert!(!is_price_reached);
     }
 
     fn new_order(
