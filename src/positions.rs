@@ -685,6 +685,8 @@ impl ActivePosition {
             }
         }
 
+        println!("order pnls: {:?}", asset_pnls);
+
         for (asset, amount) in self.calc_top_ups_pnls_by_assets().into_iter() {
             let asset_pnl = asset_pnls.get_mut(&asset);
 
@@ -716,7 +718,7 @@ impl ActivePosition {
             let pnl = self.calculate_pnl(*amount, self.activate_price);
             let max_loss_amount = amount * -1.0; // limit for isolated trade
 
-            if pnl < max_loss_amount {
+            if self.order.top_up_enabled && pnl < max_loss_amount {
                 pnls_by_assets.insert(asset.to_owned(), max_loss_amount);
             } else {
                 pnls_by_assets.insert(asset.to_owned(), pnl);
@@ -792,6 +794,7 @@ mod tests {
     };
     use rust_extensions::date_time::DateTimeAsMicroseconds;
     use std::collections::HashMap;
+    use crate::top_ups::ActiveTopUp;
 
     #[tokio::test]
     async fn close_active_position() {
@@ -865,6 +868,50 @@ mod tests {
             Position::Closed(position) => position,
             _ => panic!("must be closed"),
         };
+    }
+
+    #[tokio::test]
+    async fn calc_pnl_with_top_ups() {
+        let instrument = "ATOMUSDT".to_string();
+        let prices = HashMap::from([("USDT".to_string(), 1.0)]);
+        let invest_assets = HashMap::from([("USDT".to_string(), 100.0)]);
+        let order = new_order(instrument, invest_assets, 10.0, OrderSide::Sell);
+        let bidask = BidAsk {
+            ask: 0.33,
+            bid: 0.33,
+            datetime: DateTimeAsMicroseconds::now(),
+            instrument: "ATOMUSDT".to_string(),
+        };
+        let mut position = new_active_position(order, &bidask, &prices);
+        position.add_top_up(ActiveTopUp {
+            id: "1".to_string(),
+            date: DateTimeAsMicroseconds::now(),
+            assets: HashMap::from([("USDT".to_string(), 50.0)]),
+            instrument_price: 0.354,
+            asset_prices: prices.clone(),
+        });
+        position.add_top_up(ActiveTopUp {
+            id: "2".to_string(),
+            date: DateTimeAsMicroseconds::now(),
+            assets: HashMap::from([("USDT".to_string(), 75.0)]),
+            instrument_price: 0.355,
+            asset_prices: prices.clone(),
+        });
+        position.add_top_up(ActiveTopUp {
+            id: "3".to_string(),
+            date: DateTimeAsMicroseconds::now(),
+            assets: HashMap::from([("USDT".to_string(), 112.5)]),
+            instrument_price: 0.37,
+            asset_prices: prices,
+        });
+        position.update(&BidAsk {
+            ask: 0.37,
+            bid: 0.37,
+            datetime: DateTimeAsMicroseconds::now(),
+            instrument: "ATOMUSDT".to_string(),
+        });
+
+        assert_eq!(-175.50113211368867, position.current_pnl);
     }
 
     #[tokio::test]
