@@ -685,8 +685,6 @@ impl ActivePosition {
             }
         }
 
-        println!("order pnls: {:?}", asset_pnls);
-
         for (asset, amount) in self.calc_top_ups_pnls_by_assets().into_iter() {
             let asset_pnl = asset_pnls.get_mut(&asset);
 
