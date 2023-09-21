@@ -716,7 +716,7 @@ impl ActivePosition {
             let pnl = self.calculate_pnl(*amount, self.activate_price);
             let max_loss_amount = amount * -1.0; // limit for isolated trade
 
-            if self.order.top_up_enabled && pnl < max_loss_amount {
+            if (!self.order.top_up_enabled || self.top_ups.is_empty()) && pnl.abs() > max_loss_amount {
                 pnls_by_assets.insert(asset.to_owned(), max_loss_amount);
             } else {
                 pnls_by_assets.insert(asset.to_owned(), pnl);
@@ -873,7 +873,8 @@ mod tests {
         let instrument = "ATOMUSDT".to_string();
         let prices = HashMap::from([("USDT".to_string(), 1.0)]);
         let invest_assets = HashMap::from([("USDT".to_string(), 100.0)]);
-        let order = new_order(instrument, invest_assets, 10.0, OrderSide::Sell);
+        let mut order = new_order(instrument, invest_assets, 10.0, OrderSide::Sell);
+        order.top_up_enabled = true;
         let bidask = BidAsk {
             ask: 0.33,
             bid: 0.33,
@@ -908,6 +909,8 @@ mod tests {
             datetime: DateTimeAsMicroseconds::now(),
             instrument: "ATOMUSDT".to_string(),
         });
+
+        println!("{}", position.current_pnl);
 
         assert_eq!(-175.50113211368867, position.current_pnl);
     }
