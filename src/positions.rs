@@ -864,6 +864,30 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn calc_pnl_with_top_ups_2() {
+        let instrument = "ATOMUSDT".to_string();
+        let prices = HashMap::from([("USDT".to_string(), 1.0)]);
+        let invest_assets = HashMap::from([("USDT".to_string(), 100.0)]);
+        let mut order = new_order(instrument, invest_assets, 10.0, OrderSide::Sell);
+        order.top_up_enabled = true;
+        let bidask = BidAsk {
+            ask: 0.37,
+            bid: 0.37,
+            datetime: DateTimeAsMicroseconds::now(),
+            instrument: "ATOMUSDT".to_string(),
+        };
+        let mut position = new_active_position(order, &bidask, &prices);
+        position.update(&BidAsk {
+            ask: 0.37,
+            bid: 0.37,
+            datetime: DateTimeAsMicroseconds::now(),
+            instrument: "ATOMUSDT".to_string(),
+        });
+
+        assert_eq!(0.0, position.current_pnl);
+    }
+
+    #[tokio::test]
     async fn calc_pnl_with_top_ups() {
         let instrument = "ATOMUSDT".to_string();
         let prices = HashMap::from([("USDT".to_string(), 1.0)]);
