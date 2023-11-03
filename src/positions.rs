@@ -301,7 +301,7 @@ impl PendingPosition {
             top_up_locked: false,
             total_invest_assets: order.invest_assets.clone(),
             order,
-            used_bonus_assets: Default::default(),
+            invest_bonus_assets: Default::default(),
         })
     }
 
@@ -360,7 +360,7 @@ impl PendingPosition {
             top_ups: Vec::with_capacity(0),
             total_invest_assets: self.total_invest_assets,
             order: self.order,
-            used_bonus_assets: Default::default(),
+            invest_bonus_assets: Default::default(),
         }
     }
 }
@@ -384,7 +384,7 @@ pub struct ActivePosition {
     pub prev_loss_percent: f64,
     pub top_up_locked: bool,
     pub total_invest_assets: HashMap<String, f64>,
-    pub used_bonus_assets: HashMap<String, f64>,
+    pub invest_bonus_assets: HashMap<String, f64>,
 }
 
 impl ActivePosition {
@@ -503,7 +503,7 @@ impl ActivePosition {
             order: self.order,
             id: self.id,
             top_ups: self.top_ups,
-            used_bonus_assets: Default::default(),
+            invest_bonus_assets: Default::default(),
         }
     }
 
@@ -770,7 +770,7 @@ pub struct ClosedPosition {
     pub asset_pnls: HashMap<String, f64>,
     pub top_ups: Vec<ActiveTopUp>,
     pub total_invest_assets: HashMap<String, f64>,
-    pub used_bonus_assets: HashMap<String, f64>,
+    pub invest_bonus_assets: HashMap<String, f64>,
 }
 
 impl ClosedPosition {
@@ -1180,7 +1180,7 @@ mod tests {
             top_up_locked: false,
             total_invest_assets: order.invest_assets.clone(),
             order,
-            used_bonus_assets: Default::default(),
+            invest_bonus_assets: Default::default(),
         }
     }
 }
