@@ -503,7 +503,7 @@ impl ActivePosition {
             order: self.order,
             id: self.id,
             top_ups: self.top_ups,
-            invest_bonus_assets: Default::default(),
+            invest_bonus_assets: self.invest_bonus_assets,
         }
     }
 
