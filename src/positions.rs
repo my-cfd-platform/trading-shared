@@ -301,7 +301,7 @@ impl PendingPosition {
             top_up_locked: false,
             total_invest_assets: order.invest_assets.clone(),
             order,
-            invest_bonus_assets: Default::default(),
+            bonus_invest_assets: Default::default(),
         })
     }
 
@@ -384,7 +384,7 @@ pub struct ActivePosition {
     pub prev_loss_percent: f64,
     pub top_up_locked: bool,
     pub total_invest_assets: HashMap<String, f64>,
-    pub invest_bonus_assets: HashMap<String, f64>,
+    pub bonus_invest_assets: HashMap<String, f64>,
 }
 
 impl ActivePosition {
@@ -412,7 +412,6 @@ impl ActivePosition {
         }
 
         let mut canceled_top_ups = Vec::with_capacity(self.top_ups.len() / 3);
-
         let mut delay_start_date = DateTimeAsMicroseconds::now();
         delay_start_date.sub(delay);
 
@@ -444,6 +443,18 @@ impl ActivePosition {
 
                 if *invested_amount <= 0.0 {
                     self.total_invest_assets.remove(asset_symbol);
+                }
+            }
+
+            for (bonus_symbol, bonus_amount) in top_up.bonus_assets.iter() {
+                let invested_bonus = self
+                    .bonus_invest_assets
+                    .get_mut(bonus_symbol)
+                    .expect("must exist: invalid top-up add");
+                *invested_bonus -= bonus_amount;
+
+                if *invested_bonus <= 0.0 {
+                    self.bonus_invest_assets.remove(bonus_symbol);
                 }
             }
 
@@ -503,7 +514,7 @@ impl ActivePosition {
             order: self.order,
             id: self.id,
             top_ups: self.top_ups,
-            invest_bonus_assets: self.invest_bonus_assets,
+            invest_bonus_assets: self.bonus_invest_assets,
         }
     }
 
@@ -616,6 +627,17 @@ impl ActivePosition {
             } else {
                 self.total_invest_assets
                     .insert(asset_symbol.to_owned(), *asset_amount);
+            }
+        }
+
+        for (bonus_symbol, bonus_amount) in top_up.bonus_assets.iter() {
+            let bonus_asset_amount = self.bonus_invest_assets.get_mut(bonus_symbol);
+
+            if let Some(bonus_asset_amount) = bonus_asset_amount {
+                *bonus_asset_amount += bonus_amount;
+            } else {
+                self.bonus_invest_assets
+                    .insert(bonus_symbol.to_owned(), *bonus_amount);
             }
         }
 
@@ -1180,7 +1202,7 @@ mod tests {
             top_up_locked: false,
             total_invest_assets: order.invest_assets.clone(),
             order,
-            invest_bonus_assets: Default::default(),
+            bonus_invest_assets: Default::default(),
         }
     }
 }

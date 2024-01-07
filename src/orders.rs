@@ -202,7 +202,7 @@ impl Order {
             top_up_locked: false,
             total_invest_assets: self.invest_assets.clone(),
             order: self,
-            invest_bonus_assets: Default::default(),
+            bonus_invest_assets: Default::default(),
         }
     }
 
