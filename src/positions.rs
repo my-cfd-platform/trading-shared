@@ -156,7 +156,7 @@ impl Position {
         let mut instruments = HashSet::new();
 
         for top_up in top_ups {
-            for (asset_symbol, _asset_amount) in top_up.assets.iter() {
+            for (asset_symbol, _asset_amount) in top_up.total_assets.iter() {
                 let instrument = format!("{}{}", asset_symbol, self.get_order().base_asset);
                 instruments.insert(instrument);
             }
@@ -435,7 +435,7 @@ impl ActivePosition {
                 return true;
             }
 
-            for (asset_symbol, asset_amount) in top_up.assets.iter() {
+            for (asset_symbol, asset_amount) in top_up.total_assets.iter() {
                 let invested_amount = self
                     .total_invest_assets
                     .get_mut(asset_symbol)
@@ -608,7 +608,7 @@ impl ActivePosition {
                 .insert(asset_symbol.to_owned(), asset_price.to_owned());
         }
 
-        for (asset_symbol, asset_amount) in top_up.assets.iter() {
+        for (asset_symbol, asset_amount) in top_up.total_assets.iter() {
             let invested_asset_amount = self.total_invest_assets.get_mut(asset_symbol);
 
             if let Some(invested_asset_amount) = invested_asset_amount {
@@ -652,7 +652,7 @@ impl ActivePosition {
         }
 
         for top_up in self.top_ups.iter() {
-            for (asset, amount) in top_up.assets.iter() {
+            for (asset, amount) in top_up.total_assets.iter() {
                 let total_amount = amounts.get_mut(asset);
                 if let Some(total_amount) = total_amount {
                     *total_amount += amount;
@@ -730,7 +730,7 @@ impl ActivePosition {
         let mut pnls_by_assets = HashMap::with_capacity(10);
 
         for top_up in self.top_ups.iter() {
-            for (asset, amount) in top_up.assets.iter() {
+            for (asset, amount) in top_up.total_assets.iter() {
                 let pnl = self.calculate_pnl(*amount, top_up.instrument_price);
                 let max_loss_amount = amount * -1.0; // limit for isolated trade
                 let pnl = if pnl < max_loss_amount {
@@ -909,21 +909,21 @@ mod tests {
         position.add_top_up(ActiveTopUp {
             id: "1".to_string(),
             date: DateTimeAsMicroseconds::now(),
-            assets: HashMap::from([("USDT".to_string(), 50.0)]),
+            total_assets: HashMap::from([("USDT".to_string(), 50.0)]),
             instrument_price: 0.354,
             asset_prices: prices.clone(),
         });
         position.add_top_up(ActiveTopUp {
             id: "2".to_string(),
             date: DateTimeAsMicroseconds::now(),
-            assets: HashMap::from([("USDT".to_string(), 75.0)]),
+            total_assets: HashMap::from([("USDT".to_string(), 75.0)]),
             instrument_price: 0.355,
             asset_prices: prices.clone(),
         });
         position.add_top_up(ActiveTopUp {
             id: "3".to_string(),
             date: DateTimeAsMicroseconds::now(),
-            assets: HashMap::from([("USDT".to_string(), 112.5)]),
+            total_assets: HashMap::from([("USDT".to_string(), 112.5)]),
             instrument_price: 0.37,
             asset_prices: prices,
         });
