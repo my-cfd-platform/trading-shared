@@ -412,8 +412,8 @@ impl ActivePosition {
         }
 
         let mut canceled_top_ups = Vec::with_capacity(self.top_ups.len() / 3);
-        let mut delay_start_date = DateTimeAsMicroseconds::now();
-        delay_start_date.sub(delay);
+        let delay_start_date = DateTimeAsMicroseconds::now();
+        let delay_start_date = delay_start_date.sub(delay);
 
         self.top_ups.retain(|top_up| {
             if top_up.date.is_later_than(delay_start_date) {
