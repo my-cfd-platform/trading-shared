@@ -4,11 +4,11 @@ use crate::{
     calculations::calculate_total_amount,
     orders::{Order, OrderSide, StopLossConfig, TakeProfitConfig},
 };
-use ahash::{HashSet, HashSetExt};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 use std::collections::HashMap;
 use std::time::Duration;
+use ahash::AHashSet;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, IntoPrimitive, TryFromPrimitive)]
@@ -132,7 +132,7 @@ impl Position {
         }
     }
 
-    pub fn get_instruments(&self) -> HashSet<String> {
+    pub fn get_instruments(&self) -> AHashSet<String> {
         match self {
             Position::Pending(position) => position.order.get_instruments().into_iter().collect(),
             Position::Active(position) => {
@@ -152,8 +152,8 @@ impl Position {
         }
     }
 
-    fn get_top_up_instruments(&self, top_ups: &Vec<ActiveTopUp>) -> HashSet<String> {
-        let mut instruments = HashSet::new();
+    fn get_top_up_instruments(&self, top_ups: &Vec<ActiveTopUp>) -> AHashSet<String> {
+        let mut instruments = AHashSet::new();
 
         for top_up in top_ups {
             for (asset_symbol, _asset_amount) in top_up.total_assets.iter() {
