@@ -80,7 +80,7 @@ impl BidAsk {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum Position {
     Active(ActivePosition),
     Closed(ClosedPosition),
@@ -175,7 +175,7 @@ pub enum PositionStatus {
     Canceled = 3,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct PendingPosition {
     pub id: String,
     pub order: Order,
@@ -934,6 +934,7 @@ mod tests {
             total_assets: HashMap::from([("USDT".to_string(), 50.0)]),
             instrument_price: 0.354,
             asset_prices: prices.clone(),
+            bonus_assets: Default::default(),
         });
         position.add_top_up(ActiveTopUp {
             id: "2".to_string(),
@@ -941,6 +942,7 @@ mod tests {
             total_assets: HashMap::from([("USDT".to_string(), 75.0)]),
             instrument_price: 0.355,
             asset_prices: prices.clone(),
+            bonus_assets: Default::default(),
         });
         position.add_top_up(ActiveTopUp {
             id: "3".to_string(),
@@ -948,6 +950,7 @@ mod tests {
             total_assets: HashMap::from([("USDT".to_string(), 112.5)]),
             instrument_price: 0.37,
             asset_prices: prices,
+            bonus_assets: Default::default(),
         });
         position.update(&BidAsk {
             ask: 0.37,
