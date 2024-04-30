@@ -214,7 +214,7 @@ impl PendingPosition {
 
         let is_stop_sell = self.order.side == OrderSide::Sell && self.open_price >= desired_price;
 
-        if is_stop_sell && self.current_price >= desired_price {
+        if is_stop_sell && self.current_price <= desired_price {
             return true;
         }
 
@@ -1120,9 +1120,10 @@ mod tests {
             instrument: "ATOMUSDT".to_string(),
         };
         let position = order.open(&bidask, &prices);
-        let Position::Pending(pending_position) = position else {
+        let Position::Pending(mut pending_position) = position else {
             panic!("Must be pending position");
         };
+        pending_position.current_price = 24900.00;
 
         let is_price_reached = pending_position.is_price_reached();
 
@@ -1146,7 +1147,7 @@ mod tests {
         let Position::Pending(mut pending_position) = position else {
             panic!("Must be pending position");
         };
-        pending_position.current_price = 24100.00;
+        pending_position.current_price = 25900.00;
 
         let is_price_reached = pending_position.is_price_reached();
 
