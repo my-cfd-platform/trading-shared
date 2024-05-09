@@ -2,7 +2,6 @@ use std::fmt::Display;
 use std::ops::Deref;
 use compact_str::CompactString;
 use rust_extensions::sorted_vec::EntityWithKey;
-use crate::asset_symbol::AssetSymbol;
 
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub struct InstrumentSymbol(pub CompactString);
