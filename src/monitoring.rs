@@ -38,6 +38,10 @@ impl PositionsMonitor {
             wallet_ids_by_instruments: Default::default(),
         }
     }
+    
+    pub fn count(&self) -> usize {
+        self.positions_cache.count()
+    }
 
     pub fn get_wallet_mut(&mut self, wallet_id: &str) -> Option<&mut Wallet> {
         let wallet = self.wallets_by_ids.get_mut(wallet_id);

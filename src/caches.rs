@@ -83,6 +83,10 @@ impl PositionsCache {
             positions_by_ids: AHashMap::with_capacity(capacity),
         }
     }
+    
+    pub fn count(&self) -> usize {
+        self.positions_by_ids.len()
+    }
 
     pub fn is_empty(&self) -> bool {
         self.positions_by_ids.is_empty()
