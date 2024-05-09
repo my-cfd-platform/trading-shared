@@ -5,6 +5,7 @@ pub mod calculations;
 pub mod monitoring;
 pub mod top_ups;
 pub mod wallets;
+pub use ahash::AHashMap;
 
 #[cfg(test)]
 mod tests {
