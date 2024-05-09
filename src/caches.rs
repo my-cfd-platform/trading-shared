@@ -45,11 +45,14 @@ impl BidAsksCache {
         self.items.get(instrument)
     }
 
-    pub fn find(&self, base_asset: &AssetSymbol, assets: &[&AssetSymbol]) -> SortedVec<InstrumentSymbol, BidAsk> {
+    pub fn find(&self, base_asset: &str, assets: &[&str]) -> SortedVec<InstrumentSymbol, BidAsk> {
         let mut bidasks = SortedVec::new_with_capacity(assets.len());
+        let base_asset: AssetSymbol = base_asset.into();
 
         for asset in assets.iter() {
-            let instrument = BidAsk::get_instrument_symbol(asset, base_asset);
+            let asset: AssetSymbol = (*asset).into();
+
+            let instrument = BidAsk::get_instrument_symbol(&base_asset, &asset);
             let bidask = self.items.get(&instrument);
 
             if let Some(bidask) = bidask {
