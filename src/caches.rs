@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::mem;
 use crate::positions::{BidAsk, Position};
 use ahash::{AHashMap, AHashSet};
@@ -36,7 +35,7 @@ impl BidAsksCache {
         self.bidasks_by_instruments.get(instrument)
     }
 
-    pub fn find(&self, base_asset: &str, assets: &[&String]) -> AHashMap<CompactString, BidAsk> {
+    pub fn find(&self, base_asset: &str, assets: &[&str]) -> AHashMap<CompactString, BidAsk> {
         let mut bidasks = AHashMap::with_capacity(assets.len());
 
         for asset in assets.iter() {
@@ -51,12 +50,12 @@ impl BidAsksCache {
         bidasks
     }
 
-    pub fn find_prices(&self, to_asset: &str, from_assets: &[&String]) -> HashMap<String, f64> {
-        let mut prices = HashMap::with_capacity(from_assets.len());
+    pub fn find_prices(&self, to_asset: &str, from_assets: &[&str]) -> AHashMap<CompactString, f64> {
+        let mut prices = AHashMap::with_capacity(from_assets.len());
 
         for asset in from_assets.iter() {
             if *asset == to_asset {
-                prices.insert((*asset).to_owned(), 1.0);
+                prices.insert(CompactString::new(asset), 1.0);
             }
 
             let instrument = BidAsk::generate_id(asset, to_asset);
@@ -64,7 +63,7 @@ impl BidAsksCache {
 
             if let Some(bidask) = bidask {
                 let price = bidask.get_asset_price(asset, &crate::orders::OrderSide::Sell);
-                prices.insert((*asset).to_owned(), price);
+                prices.insert(CompactString::new(asset), price);
             }
         }
 
