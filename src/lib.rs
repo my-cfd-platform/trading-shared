@@ -9,7 +9,7 @@ pub mod instrument_symbol;
 pub mod position_id;
 pub mod asset_symbol;
 pub mod wallet_id;
-mod assets;
+pub mod assets;
 
 
 pub use ahash::AHashMap;
