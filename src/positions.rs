@@ -1,15 +1,15 @@
 use crate::calculations::{calculate_percent, floor};
 use crate::top_ups::{ActiveTopUp, CanceledTopUp};
-use crate::{
-    calculations::calculate_total_amount,
-    orders::{Order, OrderSide, StopLossConfig, TakeProfitConfig},
-};
+use crate::{assets, calculations::calculate_total_amount, orders::{Order, OrderSide, StopLossConfig, TakeProfitConfig}};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 use std::time::Duration;
-use ahash::{AHashMap, AHashSet};
-use compact_str::CompactString;
+use rust_extensions::sorted_vec::SortedVec;
 use uuid::Uuid;
+use crate::asset_symbol::AssetSymbol;
+use crate::assets::{AssetAmount, AssetPrice};
+use crate::instrument_symbol::InstrumentSymbol;
+use crate::position_id::PositionId;
 
 #[derive(Debug, Clone, IntoPrimitive, TryFromPrimitive)]
 #[repr(i32)]
@@ -24,24 +24,24 @@ pub enum ClosePositionReason {
 
 #[derive(Clone)]
 pub struct BidAsk {
-    pub instrument: CompactString,
+    pub instrument: InstrumentSymbol,
     pub datetime: DateTimeAsMicroseconds,
     pub bid: f64,
     pub ask: f64,
 }
 
 impl BidAsk {
-    pub fn new_synthetic(id: CompactString, bid: f64, ask: f64) -> Self {
+    pub fn new_synthetic(symbol: InstrumentSymbol, bid: f64, ask: f64) -> Self {
         Self {
-            instrument: id,
+            instrument: symbol,
             datetime: DateTimeAsMicroseconds::now(),
             bid,
             ask,
         }
     }
 
-    pub fn generate_id(base_asset: &str, quote_asset: &str) -> CompactString {
-        let id = format!("{}{}", base_asset, quote_asset); // todo: find better solution
+    pub fn get_instrument_symbol(base_asset: &AssetSymbol, quote_asset: &AssetSymbol) -> InstrumentSymbol {
+        let id = format!("{}{}", base_asset, quote_asset);
 
         id.into()
     }
@@ -60,17 +60,17 @@ impl BidAsk {
         }
     }
 
-    pub fn get_asset_price(&self, asset: &str, side: &OrderSide) -> f64 {
+    pub fn get_asset_price(&self, asset: &AssetSymbol, side: &OrderSide) -> f64 {
         match side {
             OrderSide::Sell => {
-                if self.instrument.starts_with(asset) {
+                if self.instrument.0.starts_with(asset.0.as_str()) {
                     self.ask
                 } else {
                     panic!("Invalid instrument {} for asset {}", self.instrument, asset)
                 }
             }
             OrderSide::Buy => {
-                if self.instrument.starts_with(asset) {
+                if self.instrument.0.starts_with(asset.0.as_str()) {
                     self.bid
                 } else {
                     panic!("Invalid instrument {} for asset {}", self.instrument, asset)
@@ -88,11 +88,11 @@ pub enum Position {
 }
 
 impl Position {
-    pub fn generate_id() -> String {
-        Uuid::new_v4().to_string()
+    pub fn generate_id() -> PositionId {
+        Uuid::new_v4().into()
     }
 
-    pub fn get_id(&self) -> &str {
+    pub fn get_id(&self) -> &PositionId {
         match self {
             Position::Active(position) => &position.id,
             Position::Closed(position) => &position.id,
@@ -100,7 +100,7 @@ impl Position {
         }
     }
 
-    pub fn get_open_asset_prices(&self) -> &AHashMap<CompactString, f64> {
+    pub fn get_open_asset_prices(&self) -> &SortedVec<AssetSymbol, AssetPrice> {
         match self {
             Position::Active(position) => &position.open_asset_prices,
             Position::Closed(position) => &position.open_asset_prices,
@@ -132,7 +132,7 @@ impl Position {
         }
     }
 
-    pub fn get_instruments(&self) -> AHashSet<CompactString> {
+    pub fn get_instruments(&self) -> Vec<InstrumentSymbol> {
         match self {
             Position::Pending(position) => position.order.get_instruments().into_iter().collect(),
             Position::Active(position) => {
@@ -152,13 +152,16 @@ impl Position {
         }
     }
 
-    fn get_top_up_instruments(&self, top_ups: &Vec<ActiveTopUp>) -> AHashSet<CompactString> {
-        let mut instruments = AHashSet::new();
+    fn get_top_up_instruments(&self, top_ups: &Vec<ActiveTopUp>) -> Vec<InstrumentSymbol> {
+        let mut instruments = Vec::with_capacity(10);
 
         for top_up in top_ups {
-            for (asset_symbol, _asset_amount) in top_up.total_assets.iter() {
-                let instrument = BidAsk::generate_id(&asset_symbol, &self.get_order().base_asset);
-                instruments.insert(instrument);
+            for item in top_up.total_assets.iter() {
+                let instrument = BidAsk::get_instrument_symbol(&item.symbol, &self.get_order().base_asset);
+
+                if !instruments.contains(&instrument) {
+                    instruments.push(instrument);
+                }
             }
         }
 
@@ -177,15 +180,15 @@ pub enum PositionStatus {
 
 #[derive(Debug, Clone)]
 pub struct PendingPosition {
-    pub id: String,
+    pub id: PositionId,
     pub order: Order,
     pub open_price: f64,
     pub open_date: DateTimeAsMicroseconds,
-    pub open_asset_prices: AHashMap<CompactString, f64>,
+    pub open_asset_prices: SortedVec<AssetSymbol, AssetPrice>,
     pub current_price: f64,
-    pub current_asset_prices: AHashMap<CompactString, f64>,
+    pub current_asset_prices: SortedVec<AssetSymbol, AssetPrice>,
     pub last_update_date: DateTimeAsMicroseconds,
-    pub total_invest_assets: AHashMap<CompactString, f64>,
+    pub total_invest_assets: SortedVec<AssetSymbol, AssetAmount>,
 }
 
 impl PendingPosition {
@@ -234,17 +237,17 @@ impl PendingPosition {
     }
 
     fn update_asset_prices(&mut self, bidask: &BidAsk) {
-        for asset in self.order.invest_assets.keys() {
-            let id = BidAsk::generate_id(asset, &self.order.base_asset);
+        for asset in self.order.invest_assets.iter() {
+            let id = BidAsk::get_instrument_symbol(&asset.symbol, &self.order.base_asset);
 
             if id == bidask.instrument {
-                let price = bidask.get_asset_price(asset, &OrderSide::Sell);
-                let current_asset_price = self.current_asset_prices.get_mut(asset);
+                let price = bidask.get_asset_price(&asset.symbol, &OrderSide::Sell);
+                let current_asset_price = self.current_asset_prices.get_mut(&asset.symbol);
 
                 if let Some(current_asset_price) = current_asset_price {
-                    *current_asset_price = price;
+                    current_asset_price.price = price;
                 } else {
-                    self.current_asset_prices.insert(asset.to_owned(), price);
+                    self.current_asset_prices.insert_or_replace(AssetPrice::new(asset.symbol.clone(), price));
                 }
             }
         }
@@ -301,7 +304,7 @@ impl PendingPosition {
             top_up_locked: false,
             total_invest_assets: order.invest_assets.clone(),
             order,
-            bonus_invest_assets: Default::default(),
+            bonus_invest_assets: SortedVec::new(),
         })
     }
 
@@ -319,23 +322,23 @@ impl PendingPosition {
 
     pub fn add_invest_assets(
         &mut self,
-        amounts_by_assets: &AHashMap<CompactString, f64>,
+        amounts_by_assets: &SortedVec<AssetSymbol, AssetAmount>,
     ) -> Result<(), String> {
-        for (asset_symbol, asset_amount) in amounts_by_assets {
-            if !self.open_asset_prices.contains_key(asset_symbol) {
+        for item in amounts_by_assets.iter() {
+            if !self.open_asset_prices.contains(&item.symbol) {
                 return Err(format!(
                     "Can't invest '{}': not found open price",
-                    asset_symbol
+                    &item.symbol
                 ));
             }
 
-            let invested_asset_amount = self.total_invest_assets.get_mut(asset_symbol);
+            let invested_asset_amount: Option<&mut AssetAmount> = self.total_invest_assets.get_mut(&item.symbol);
 
             if let Some(invested_asset_amount) = invested_asset_amount {
-                *invested_asset_amount += asset_amount;
+                invested_asset_amount.amount += item.amount;
             } else {
                 self.total_invest_assets
-                    .insert(asset_symbol.to_owned(), asset_amount.to_owned());
+                    .insert_or_replace(item.to_owned());
             }
         }
 
@@ -345,13 +348,13 @@ impl PendingPosition {
     pub fn close(self, reason: ClosePositionReason) -> ClosedPosition {
         ClosedPosition {
             pnl: None,
-            asset_pnls: AHashMap::new(),
+            asset_pnls: SortedVec::new(),
             open_price: self.open_price,
             open_date: self.open_date,
             open_asset_prices: self.open_asset_prices,
             activate_date: None,
             activate_price: None,
-            activate_asset_prices: AHashMap::new(),
+            activate_asset_prices: SortedVec::new(),
             close_date: DateTimeAsMicroseconds::now(),
             close_price: self.current_price,
             close_reason: reason,
@@ -360,31 +363,31 @@ impl PendingPosition {
             top_ups: Vec::with_capacity(0),
             total_invest_assets: self.total_invest_assets,
             order: self.order,
-            invest_bonus_assets: Default::default(),
+            invest_bonus_assets: SortedVec::new(),
         }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct ActivePosition {
-    pub id: String,
+    pub id: PositionId,
     pub order: Order,
     pub open_price: f64,
     pub open_date: DateTimeAsMicroseconds,
-    pub open_asset_prices: AHashMap<CompactString, f64>,
+    pub open_asset_prices: SortedVec<AssetSymbol, AssetPrice>,
     pub activate_price: f64,
     pub activate_date: DateTimeAsMicroseconds,
-    pub activate_asset_prices: AHashMap<CompactString, f64>,
+    pub activate_asset_prices: SortedVec<AssetSymbol, AssetPrice>,
     pub current_price: f64,
-    pub current_asset_prices: AHashMap<CompactString, f64>,
+    pub current_asset_prices: SortedVec<AssetSymbol, AssetPrice>,
     pub last_update_date: DateTimeAsMicroseconds,
     pub top_ups: Vec<ActiveTopUp>,
     pub current_pnl: f64,
     pub current_loss_percent: f64,
     pub prev_loss_percent: f64,
     pub top_up_locked: bool,
-    pub total_invest_assets: AHashMap<CompactString, f64>,
-    pub bonus_invest_assets: AHashMap<CompactString, f64>,
+    pub total_invest_assets: SortedVec<AssetSymbol, AssetAmount>,
+    pub bonus_invest_assets: SortedVec<AssetSymbol, AssetAmount>,
 }
 
 impl ActivePosition {
@@ -434,27 +437,27 @@ impl ActivePosition {
                 return true;
             }
 
-            for (asset_symbol, asset_amount) in top_up.total_assets.iter() {
+            for item in top_up.total_assets.iter() {
                 let invested_amount = self
                     .total_invest_assets
-                    .get_mut(asset_symbol)
+                    .get_mut(&item.symbol)
                     .expect("must exist: invalid top-up add");
-                *invested_amount -= asset_amount;
+                invested_amount.amount -= item.amount;
 
-                if *invested_amount <= 0.0 {
-                    self.total_invest_assets.remove(asset_symbol);
+                if invested_amount.amount <= 0.0 {
+                    self.total_invest_assets.remove(&item.symbol);
                 }
             }
 
-            for (bonus_symbol, bonus_amount) in top_up.bonus_assets.iter() {
+            for item in top_up.bonus_assets.iter() {
                 let invested_bonus = self
                     .bonus_invest_assets
-                    .get_mut(bonus_symbol)
+                    .get_mut(&item.symbol)
                     .expect("must exist: invalid top-up add");
-                *invested_bonus -= bonus_amount;
+                invested_bonus.amount -= item.amount;
 
-                if *invested_bonus <= 0.0 {
-                    self.bonus_invest_assets.remove(bonus_symbol);
+                if invested_bonus.amount <= 0.0 {
+                    self.bonus_invest_assets.remove(&item.symbol);
                 }
             }
 
@@ -473,17 +476,17 @@ impl ActivePosition {
     }
 
     fn try_update_asset_price(&mut self, bidask: &BidAsk) {
-        for asset in self.total_invest_assets.keys() {
-            let id = BidAsk::generate_id(asset, &self.order.base_asset);
+        for asset in self.total_invest_assets.iter() {
+            let id = BidAsk::get_instrument_symbol(&asset.symbol, &self.order.base_asset);
 
             if id == bidask.instrument {
-                let price = bidask.get_asset_price(asset, &OrderSide::Sell);
-                let current_asset_price = self.current_asset_prices.get_mut(asset);
+                let price = bidask.get_asset_price(&asset.symbol, &OrderSide::Sell);
+                let current_asset_price = self.current_asset_prices.get_mut(&asset.symbol);
 
                 if let Some(current_asset_price) = current_asset_price {
-                    *current_asset_price = price;
+                    current_asset_price.price = price;
                 } else {
-                    self.current_asset_prices.insert(asset.to_owned(), price);
+                    self.current_asset_prices.insert_or_replace(AssetPrice {price, symbol: asset.symbol.clone()});
                 }
             }
         }
@@ -614,30 +617,27 @@ impl ActivePosition {
     }
 
     pub fn add_top_up(&mut self, top_up: ActiveTopUp) {
-        for (asset_symbol, asset_price) in top_up.asset_prices.iter() {
-            self.current_asset_prices
-                .insert(asset_symbol.to_owned(), asset_price.to_owned());
+        for item in top_up.asset_prices.iter() {
+            self.current_asset_prices.insert_or_replace(item.clone());
         }
 
-        for (asset_symbol, asset_amount) in top_up.total_assets.iter() {
-            let invested_asset_amount = self.total_invest_assets.get_mut(asset_symbol);
+        for item in top_up.total_assets.iter() {
+            let invested_asset_amount = self.total_invest_assets.get_mut(&item.symbol);
 
             if let Some(invested_asset_amount) = invested_asset_amount {
-                *invested_asset_amount += asset_amount;
+                invested_asset_amount.amount += item.amount;
             } else {
-                self.total_invest_assets
-                    .insert(asset_symbol.to_owned(), *asset_amount);
+                self.total_invest_assets.insert_or_replace(item.clone());
             }
         }
 
-        for (bonus_symbol, bonus_amount) in top_up.bonus_assets.iter() {
-            let bonus_asset_amount = self.bonus_invest_assets.get_mut(bonus_symbol);
+        for item in top_up.bonus_assets.iter() {
+            let bonus_asset_amount = self.bonus_invest_assets.get_mut(&item.symbol);
 
             if let Some(bonus_asset_amount) = bonus_asset_amount {
-                *bonus_asset_amount += bonus_amount;
+                bonus_asset_amount.amount += item.amount;
             } else {
-                self.bonus_invest_assets
-                    .insert(bonus_symbol.to_owned(), *bonus_amount);
+                self.bonus_invest_assets.insert_or_replace(item.clone());
             }
         }
 
@@ -661,25 +661,27 @@ impl ActivePosition {
     }
 
     /// Calculates total asset amounts invested to position. Including order and all active top-ups
-    pub fn calc_total_invest_assets(&self) -> AHashMap<CompactString, f64> {
-        let mut amounts = AHashMap::with_capacity(self.order.invest_assets.len() + 5);
+    pub fn calc_total_invest_assets(&self) -> SortedVec<AssetSymbol, AssetAmount> {
+        let mut amounts = SortedVec::new_with_capacity(self.order.invest_assets.len() + 5);
 
-        for (asset, amount) in self.order.invest_assets.iter() {
-            let total_amount = amounts.get_mut(asset);
+        for item in self.order.invest_assets.iter() {
+            let total_amount: Option<&mut AssetAmount> = amounts.get_mut(&item.symbol);
+
             if let Some(total_amount) = total_amount {
-                *total_amount += amount;
+                total_amount.amount += item.amount;
             } else {
-                amounts.insert(asset.to_owned(), amount.to_owned());
+                amounts.insert_or_replace(item.clone());
             }
         }
 
         for top_up in self.top_ups.iter() {
-            for (asset, amount) in top_up.total_assets.iter() {
-                let total_amount = amounts.get_mut(asset);
+            for item in top_up.total_assets.iter() {
+                let total_amount = amounts.get_mut(&item.symbol);
+
                 if let Some(total_amount) = total_amount {
-                    *total_amount += amount;
+                    total_amount.amount += item.amount;
                 } else {
-                    amounts.insert(asset.to_owned(), amount.to_owned());
+                    amounts.insert_or_replace(item.clone());
                 }
             }
         }
@@ -688,46 +690,46 @@ impl ActivePosition {
     }
 
     /// Calculates pnl by all invested assets, includes order, and top-ups
-    pub fn calc_pnls_by_assets(&self, pnl_accuracy: Option<u32>) -> AHashMap<CompactString, f64> {
-        let mut asset_pnls = AHashMap::with_capacity(self.order.invest_assets.len() + 5);
+    pub fn calc_pnls_by_assets(&self, pnl_accuracy: Option<u32>) -> SortedVec<AssetSymbol, AssetAmount> {
+        let mut asset_pnls: SortedVec<AssetSymbol, AssetAmount> = SortedVec::new_with_capacity(self.order.invest_assets.len() + 5);
 
-        for (asset, amount) in self.calc_order_pnls_by_assets().into_iter() {
-            let asset_pnl = asset_pnls.get_mut(&asset);
+        for item in self.calc_order_pnls_by_assets().iter() {
+            let asset_pnl: Option<&mut AssetAmount> = asset_pnls.get_mut(&item.symbol);
 
             if let Some(asset_pnl) = asset_pnl {
-                *asset_pnl += amount;
+                asset_pnl.amount += item.amount;
 
                 if let Some(pnl_accuracy) = pnl_accuracy {
-                    *asset_pnl = floor(*asset_pnl, pnl_accuracy);
+                    asset_pnl.amount = floor(asset_pnl.amount, pnl_accuracy);
                 };
             } else {
                 let amount = if let Some(pnl_accuracy) = pnl_accuracy {
-                    floor(amount, pnl_accuracy)
+                    floor(item.amount, pnl_accuracy)
                 } else {
-                    amount
+                    item.amount
                 };
 
-                asset_pnls.insert(asset, amount);
+                asset_pnls.insert_or_replace(assets::AssetAmount {symbol: item.symbol.clone(), amount});
             }
         }
 
-        for (asset, amount) in self.calc_top_ups_pnls_by_assets().into_iter() {
-            let asset_pnl = asset_pnls.get_mut(&asset);
+        for item in self.calc_top_ups_pnls_by_assets().iter() {
+            let asset_pnl: Option<&mut AssetAmount> = asset_pnls.get_mut(&item.symbol);
 
             if let Some(asset_pnl) = asset_pnl {
-                *asset_pnl += amount;
+                asset_pnl.amount += item.amount;
 
                 if let Some(pnl_accuracy) = pnl_accuracy {
-                    *asset_pnl = floor(*asset_pnl, pnl_accuracy);
+                    asset_pnl.amount = floor(asset_pnl.amount, pnl_accuracy);
                 };
             } else {
                 let amount = if let Some(pnl_accuracy) = pnl_accuracy {
-                    floor(amount, pnl_accuracy)
+                    floor(item.amount, pnl_accuracy)
                 } else {
-                    amount
+                    item.amount
                 };
 
-                asset_pnls.insert(asset, amount);
+                asset_pnls.insert_or_replace(assets::AssetAmount{symbol:item.symbol.clone(), amount});
             }
         }
 
@@ -735,37 +737,38 @@ impl ActivePosition {
     }
 
     /// Calculates pnl by invested assets initially in order
-    pub fn calc_order_pnls_by_assets(&self) -> AHashMap<CompactString, f64> {
-        let mut pnls_by_assets = AHashMap::with_capacity(self.order.invest_assets.len());
+    pub fn calc_order_pnls_by_assets(&self) -> SortedVec<AssetSymbol, AssetAmount> {
+        let mut pnls_by_assets = SortedVec::new_with_capacity(self.order.invest_assets.len());
 
-        for (asset, amount) in self.order.invest_assets.iter() {
-            let pnl = self.calculate_pnl(*amount, self.activate_price);
+        for item in self.order.invest_assets.iter() {
+            let pnl = self.calculate_pnl(item.amount, self.activate_price);
 
-            pnls_by_assets.insert(asset.to_owned(), pnl);
+            pnls_by_assets.insert_or_replace(assets::AssetAmount { amount:pnl, symbol: item.symbol.clone()});
         }
 
         pnls_by_assets
     }
 
     /// Calculates pnl by invested assets in top-ups
-    pub fn calc_top_ups_pnls_by_assets(&self) -> AHashMap<CompactString, f64> {
-        let mut pnls_by_assets = AHashMap::with_capacity(10);
+    pub fn calc_top_ups_pnls_by_assets(&self) -> SortedVec<AssetSymbol, AssetAmount> {
+        let mut pnls_by_assets = SortedVec::new_with_capacity(10);
 
         for top_up in self.top_ups.iter() {
-            for (asset, amount) in top_up.total_assets.iter() {
-                let pnl = self.calculate_pnl(*amount, top_up.instrument_price);
-                let max_loss_amount = amount * -1.0; // limit for isolated trade
+            for item in top_up.total_assets.iter() {
+                let pnl = self.calculate_pnl(item.amount, top_up.instrument_price);
+                let max_loss_amount = item.amount * -1.0; // limit for isolated trade
                 let pnl = if pnl < max_loss_amount {
                     max_loss_amount
                 } else {
                     pnl
                 };
 
-                let total_asset_pnl = pnls_by_assets.get_mut(asset);
+                let total_asset_pnl: Option<&mut AssetAmount> = pnls_by_assets.get_mut(&item.symbol);
+                
                 if let Some(total_asset_pnl) = total_asset_pnl {
-                    *total_asset_pnl += pnl;
+                    total_asset_pnl.amount += pnl;
                 } else {
-                    pnls_by_assets.insert(asset.to_owned(), pnl);
+                    pnls_by_assets.insert_or_replace(assets::AssetAmount {amount:pnl, symbol: item.symbol.clone()});
                 }
             }
         }
@@ -776,23 +779,23 @@ impl ActivePosition {
 
 #[derive(Debug, Clone)]
 pub struct ClosedPosition {
-    pub id: String,
+    pub id: PositionId,
     pub order: Order,
     pub open_price: f64,
     pub open_date: DateTimeAsMicroseconds,
-    pub open_asset_prices: AHashMap<CompactString, f64>,
+    pub open_asset_prices: SortedVec<AssetSymbol, AssetPrice>,
     pub activate_price: Option<f64>,
     pub activate_date: Option<DateTimeAsMicroseconds>,
-    pub activate_asset_prices: AHashMap<CompactString, f64>,
+    pub activate_asset_prices: SortedVec<AssetSymbol, AssetPrice>,
     pub close_price: f64,
     pub close_date: DateTimeAsMicroseconds,
     pub close_reason: ClosePositionReason,
-    pub close_asset_prices: AHashMap<CompactString, f64>,
+    pub close_asset_prices: SortedVec<AssetSymbol, AssetPrice>,
     pub pnl: Option<f64>,
-    pub asset_pnls: AHashMap<CompactString, f64>,
+    pub asset_pnls: SortedVec<AssetSymbol, AssetAmount>,
     pub top_ups: Vec<ActiveTopUp>,
-    pub total_invest_assets: AHashMap<CompactString, f64>,
-    pub invest_bonus_assets: AHashMap<CompactString, f64>,
+    pub total_invest_assets: SortedVec<AssetSymbol, AssetAmount>,
+    pub invest_bonus_assets: SortedVec<AssetSymbol, AssetAmount>,
 }
 
 impl ClosedPosition {
@@ -808,27 +811,29 @@ impl ClosedPosition {
 #[cfg(test)]
 mod tests {
     use super::{ActivePosition, ClosePositionReason};
-    use crate::{
-        orders::{Order, OrderSide, TakeProfitConfig},
-        positions::{BidAsk, Position},
-    };
+    use crate::{assets, orders::{Order, OrderSide, TakeProfitConfig}, positions::{BidAsk, Position}};
     use rust_extensions::date_time::DateTimeAsMicroseconds;
-    use ahash::AHashMap;
-    use compact_str::CompactString;
+    use rust_extensions::sorted_vec::SortedVec;
+    use uuid::Uuid;
+    use crate::asset_symbol::AssetSymbol;
+    use crate::assets::{AssetAmount, AssetPrice};
+    use crate::instrument_symbol::InstrumentSymbol;
     use crate::top_ups::ActiveTopUp;
 
     #[tokio::test]
     async fn close_active_position() {
+        let mut invest_assets = SortedVec::new();
+        invest_assets.insert_or_replace(assets::AssetAmount{ amount: 100.0, symbol: "BTC".into()});
         let order = Order {
-            base_asset: CompactString::new("USDT"),
+            base_asset: "USDT".into(),
             id: "test".to_string(),
-            instrument: CompactString::new("ATOMUSDT"),
+            instrument: "ATOMUSDT".into(),
             trader_id: "test".to_string(),
-            wallet_id: "test".to_string(),
+            wallet_id: Uuid::new_v4().into(),
             created_date: DateTimeAsMicroseconds::now(),
             desire_price: None,
             funding_fee_period: None,
-            invest_assets: AHashMap::from([(CompactString::new("BTC"), 100.0)]),
+            invest_assets,
             leverage: 1.0,
             side: OrderSide::Buy,
             take_profit: None,
@@ -838,12 +843,13 @@ mod tests {
             top_up_enabled: false,
             top_up_percent: 10.0,
         };
-        let prices = AHashMap::from([(CompactString::new("BTC"), 22300.0)]);
+        let mut prices = SortedVec::new();
+        prices.insert_or_replace(assets::AssetPrice{ price: 22300.0, symbol: "BTC".into()});
         let bidask = BidAsk {
             ask: 14.748,
             bid: 14.748,
             datetime: DateTimeAsMicroseconds::now(),
-            instrument: CompactString::new("ATOMUSDT"),
+            instrument: "ATOMUSDT".into(),
         };
         let position = order.open(&bidask, &prices);
         let mut position = match position {
@@ -857,28 +863,31 @@ mod tests {
         let closed_position = position.close(ClosePositionReason::ClientCommand, None);
 
         let pnl = closed_position.pnl.unwrap();
-        let asset_pnl = *closed_position.asset_pnls.get("BTC").unwrap();
+        let asset_pnl = closed_position.asset_pnls.get(&AssetSymbol("BTC".into())).clone().unwrap();
 
-        assert_ne!(pnl, asset_pnl);
+        assert_ne!(pnl, asset_pnl.amount);
         assert_eq!(302.41388662883173, pnl);
-        assert_eq!(0.01356116083537362, asset_pnl);
+        assert_eq!(0.01356116083537362, asset_pnl.amount);
     }
 
     #[tokio::test]
     async fn close_by_tp() {
-        let instrument = CompactString::new("ATOMUSDT");
-        let prices = AHashMap::from([(CompactString::new("USDT"), 1.0)]);
-        let invest_assets = AHashMap::from([(CompactString::new("USDT"), 100342.0)]);
+        let instrument: InstrumentSymbol = "ATOMUSDT".into();
+        let mut prices = SortedVec::new();
+        prices.insert_or_replace(AssetPrice {price: 1.0, symbol: "USDT".into()});
+        let mut invest_assets = SortedVec::new();
+        invest_assets.insert_or_replace(assets::AssetAmount {amount: 100342.0, symbol: "USDT".into()});
+
         let order = new_order(instrument, invest_assets, 1.0, OrderSide::Sell);
         let bidask = BidAsk {
             ask: 13.815,
             bid: 13.815,
             datetime: DateTimeAsMicroseconds::now(),
-            instrument: CompactString::new("ATOMUSDT"),
+            instrument: "ATOMUSDT".into(),
         };
         let mut position = new_active_position(order, &bidask, &prices);
         let take_profit = TakeProfitConfig {
-            unit: crate::orders::AutoClosePositionUnit::PriceRate,
+            unit: crate::orders::AutoClosePositionUnit::PriceRateUnit,
             value: 13.817,
         };
         position.set_take_profit(Some(take_profit));
@@ -893,23 +902,26 @@ mod tests {
 
     #[tokio::test]
     async fn calc_pnl_with_top_ups_2() {
-        let instrument = CompactString::new("ATOMUSDT");
-        let prices = AHashMap::from([(CompactString::new("USDT"), 1.0)]);
-        let invest_assets = AHashMap::from([(CompactString::new("USDT"), 100.0)]);
-        let mut order = new_order(instrument, invest_assets, 10.0, OrderSide::Sell);
+        let instrument: InstrumentSymbol = "ATOMUSDT".into();
+        let mut prices = SortedVec::new();
+        prices.insert_or_replace(AssetPrice {price: 1.0, symbol: "USDT".into()});
+        let mut invest_assets = SortedVec::new();
+        invest_assets.insert_or_replace(assets::AssetAmount {amount: 100.0, symbol: "USDT".into()});
+
+        let mut order = new_order(instrument.clone(), invest_assets, 10.0, OrderSide::Sell);
         order.top_up_enabled = true;
         let bidask = BidAsk {
             ask: 0.37,
             bid: 0.37,
             datetime: DateTimeAsMicroseconds::now(),
-            instrument: CompactString::new("ATOMUSDT"),
+            instrument: instrument.clone(),
         };
         let mut position = new_active_position(order, &bidask, &prices);
         position.update(&BidAsk {
             ask: 0.37,
             bid: 0.37,
             datetime: DateTimeAsMicroseconds::now(),
-            instrument: CompactString::new("ATOMUSDT"),
+            instrument,
         });
 
         assert_eq!(0.0, position.current_pnl);
@@ -917,47 +929,59 @@ mod tests {
 
     #[tokio::test]
     async fn calc_pnl_with_top_ups() {
-        let instrument = CompactString::new("ATOMUSDT");
-        let prices = AHashMap::from([(CompactString::new("USDT"), 1.0)]);
-        let invest_assets = AHashMap::from([(CompactString::new("USDT"), 100.0)]);
-        let mut order = new_order(instrument, invest_assets, 10.0, OrderSide::Sell);
+        let instrument: InstrumentSymbol = "ATOMUSDT".into();
+        let mut prices = SortedVec::new();
+        prices.insert_or_replace(AssetPrice {price: 1.0, symbol: "USDT".into()});
+        let mut invest_assets = SortedVec::new();
+        invest_assets.insert_or_replace(assets::AssetAmount {amount: 100.0, symbol: "USDT".into()});
+        
+        let mut order = new_order(instrument.clone(), invest_assets, 10.0, OrderSide::Sell);
         order.top_up_enabled = true;
         let bidask = BidAsk {
             ask: 0.33,
             bid: 0.33,
             datetime: DateTimeAsMicroseconds::now(),
-            instrument: CompactString::new("ATOMUSDT"),
+            instrument: instrument.clone(),
         };
+
+        let mut total_assets = SortedVec::new();
+        total_assets.insert_or_replace(AssetAmount{ amount: 50.0, symbol: "USDT".into()});
         let mut position = new_active_position(order, &bidask, &prices);
         position.add_top_up(ActiveTopUp {
             id: "1".to_string(),
             date: DateTimeAsMicroseconds::now(),
-            total_assets: AHashMap::from([(CompactString::new("USDT"), 50.0)]),
+            total_assets,
             instrument_price: 0.354,
             asset_prices: prices.clone(),
-            bonus_assets: Default::default(),
+            bonus_assets: SortedVec::new(),
         });
+
+        let mut total_assets = SortedVec::new();
+        total_assets.insert_or_replace(AssetAmount{ amount: 75.0, symbol: "USDT".into()});
         position.add_top_up(ActiveTopUp {
             id: "2".to_string(),
             date: DateTimeAsMicroseconds::now(),
-            total_assets: AHashMap::from([(CompactString::new("USDT"), 75.0)]),
+            total_assets,
             instrument_price: 0.355,
             asset_prices: prices.clone(),
-            bonus_assets: Default::default(),
+            bonus_assets: SortedVec::new(),
         });
+        
+        let mut total_assets = SortedVec::new();
+        total_assets.insert_or_replace(AssetAmount{ amount: 112.5, symbol: "USDT".into()});
         position.add_top_up(ActiveTopUp {
             id: "3".to_string(),
             date: DateTimeAsMicroseconds::now(),
-            total_assets: AHashMap::from([(CompactString::new("USDT"), 112.5)]),
+            total_assets,
             instrument_price: 0.37,
             asset_prices: prices,
-            bonus_assets: Default::default(),
+            bonus_assets: SortedVec::new(),
         });
         position.update(&BidAsk {
             ask: 0.37,
             bid: 0.37,
             datetime: DateTimeAsMicroseconds::now(),
-            instrument: CompactString::new("ATOMUSDT"),
+            instrument,
         });
 
         println!("{}", position.current_pnl);
@@ -967,16 +991,18 @@ mod tests {
 
     #[tokio::test]
     async fn stop_buy_not_reached() {
-        let instrument = CompactString::new("ATOMUSDT");
-        let prices = AHashMap::from([(CompactString::new("USDT"), 1.0)]);
-        let invest_assets = AHashMap::from([(CompactString::new("USDT"), 100342.0)]);
-        let mut order = new_order(instrument, invest_assets, 1.0, OrderSide::Buy);
+        let instrument: InstrumentSymbol = "ATOMUSDT".into();
+        let mut prices = SortedVec::new();
+        prices.insert_or_replace(AssetPrice {price: 1.0, symbol: "USDT".into()});
+        let mut invest_assets = SortedVec::new();
+        invest_assets.insert_or_replace(assets::AssetAmount {amount: 100342.0, symbol: "USDT".into()});
+        let mut order = new_order(instrument.clone(), invest_assets, 1.0, OrderSide::Buy);
         order.desire_price = Some(26000.00);
         let bidask = BidAsk {
             ask: 25900.00,
             bid: 25900.00,
             datetime: DateTimeAsMicroseconds::now(),
-            instrument: CompactString::new("ATOMUSDT"),
+            instrument,
         };
         let position = order.open(&bidask, &prices);
         let Position::Pending(pending_position) = position else {
@@ -990,16 +1016,19 @@ mod tests {
 
     #[tokio::test]
     async fn stop_buy_reached() {
-        let instrument = CompactString::new("ATOMUSDT");
-        let prices = AHashMap::from([(CompactString::new("USDT"), 1.0)]);
-        let invest_assets = AHashMap::from([(CompactString::new("USDT"), 100342.0)]);
-        let mut order = new_order(instrument, invest_assets, 1.0, OrderSide::Buy);
+        let instrument: InstrumentSymbol = "ATOMUSDT".into();
+        let mut prices = SortedVec::new();
+        prices.insert_or_replace(AssetPrice {price: 1.0, symbol: "USDT".into()});
+        let mut invest_assets = SortedVec::new();
+        invest_assets.insert_or_replace(assets::AssetAmount {amount: 100342.0, symbol: "USDT".into()});
+        
+        let mut order = new_order(instrument.clone(), invest_assets, 1.0, OrderSide::Buy);
         order.desire_price = Some(26000.00);
         let bidask = BidAsk {
             ask: 25900.00,
             bid: 25900.00,
             datetime: DateTimeAsMicroseconds::now(),
-            instrument: CompactString::new("ATOMUSDT"),
+            instrument,
         };
         let position = order.open(&bidask, &prices);
         let Position::Pending(mut pending_position) = position else {
@@ -1014,16 +1043,19 @@ mod tests {
 
     #[tokio::test]
     async fn limit_buy_reached() {
-        let instrument = CompactString::new("ATOMUSDT");
-        let prices = AHashMap::from([(CompactString::new("USDT"), 1.0)]);
-        let invest_assets = AHashMap::from([(CompactString::new("USDT"), 100342.0)]);
-        let mut order = new_order(instrument, invest_assets, 1.0, OrderSide::Buy);
+        let instrument: InstrumentSymbol = "ATOMUSDT".into();
+        let mut prices = SortedVec::new();
+        prices.insert_or_replace(AssetPrice {price: 1.0, symbol: "USDT".into()});
+        let mut invest_assets = SortedVec::new();
+        invest_assets.insert_or_replace(assets::AssetAmount {amount: 100342.0, symbol: "USDT".into()});
+        
+        let mut order = new_order(instrument.clone(), invest_assets, 1.0, OrderSide::Buy);
         order.desire_price = Some(25000.00);
         let bidask = BidAsk {
             ask: 25900.00,
             bid: 25900.00,
             datetime: DateTimeAsMicroseconds::now(),
-            instrument: CompactString::new("ATOMUSDT"),
+            instrument,
         };
         let position = order.open(&bidask, &prices);
         let Position::Pending(mut pending_position) = position else {
@@ -1038,16 +1070,19 @@ mod tests {
 
     #[tokio::test]
     async fn limit_buy_not_reached() {
-        let instrument = CompactString::new("ATOMUSDT");
-        let prices = AHashMap::from([(CompactString::new("USDT"), 1.0)]);
-        let invest_assets = AHashMap::from([(CompactString::new("USDT"), 100342.0)]);
-        let mut order = new_order(instrument, invest_assets, 1.0, OrderSide::Buy);
+        let instrument: InstrumentSymbol = "ATOMUSDT".into();
+        let mut prices = SortedVec::new();
+        prices.insert_or_replace(assets::AssetPrice {price: 1.0, symbol: "USDT".into()});
+        let mut invest_assets = SortedVec::new();
+        invest_assets.insert_or_replace(assets::AssetAmount {amount: 100342.0, symbol: "USDT".into()});
+        
+        let mut order = new_order(instrument.clone(), invest_assets, 1.0, OrderSide::Buy);
         order.desire_price = Some(25000.00);
         let bidask = BidAsk {
             ask: 25900.00,
             bid: 25900.00,
             datetime: DateTimeAsMicroseconds::now(),
-            instrument: CompactString::new("ATOMUSDT"),
+            instrument,
         };
         let position = order.open(&bidask, &prices);
         let Position::Pending(mut pending_position) = position else {
@@ -1062,16 +1097,19 @@ mod tests {
 
     #[tokio::test]
     async fn limit_sell_not_reached() {
-        let instrument = CompactString::new("ATOMUSDT");
-        let prices = AHashMap::from([(CompactString::new("USDT"), 1.0)]);
-        let invest_assets = AHashMap::from([(CompactString::new("USDT"), 100342.0)]);
-        let mut order = new_order(instrument, invest_assets, 1.0, OrderSide::Sell);
+        let instrument: InstrumentSymbol = "ATOMUSDT".into();
+        let mut prices = SortedVec::new();
+        prices.insert_or_replace(assets::AssetPrice {price: 1.0, symbol: "USDT".into()});
+        let mut invest_assets = SortedVec::new();
+        invest_assets.insert_or_replace(assets::AssetAmount {amount: 100342.0, symbol: "USDT".into()});
+        
+        let mut order = new_order(instrument.clone(), invest_assets, 1.0, OrderSide::Sell);
         order.desire_price = Some(26000.00);
         let bidask = BidAsk {
             ask: 25900.00,
             bid: 25900.00,
             datetime: DateTimeAsMicroseconds::now(),
-            instrument: CompactString::new("ATOMUSDT"),
+            instrument,
         };
         let position = order.open(&bidask, &prices);
         let Position::Pending(pending_position) = position else {
@@ -1085,16 +1123,19 @@ mod tests {
 
     #[tokio::test]
     async fn limit_sell_reached() {
-        let instrument = CompactString::new("ATOMUSDT");
-        let prices = AHashMap::from([(CompactString::new("USDT"), 1.0)]);
-        let invest_assets = AHashMap::from([(CompactString::new("USDT"), 100342.0)]);
-        let mut order = new_order(instrument, invest_assets, 1.0, OrderSide::Sell);
+        let instrument: InstrumentSymbol = "ATOMUSDT".into();
+        let mut prices = SortedVec::new();
+        prices.insert_or_replace(assets::AssetPrice {price: 1.0, symbol: "USDT".into()});
+        let mut invest_assets = SortedVec::new();
+        invest_assets.insert_or_replace(assets::AssetAmount {amount: 100342.0, symbol: "USDT".into()});
+        
+        let mut order = new_order(instrument.clone(), invest_assets, 1.0, OrderSide::Sell);
         order.desire_price = Some(26000.00);
         let bidask = BidAsk {
             ask: 25900.00,
             bid: 25900.00,
             datetime: DateTimeAsMicroseconds::now(),
-            instrument: CompactString::new("ATOMUSDT"),
+            instrument,
         };
         let position = order.open(&bidask, &prices);
         let Position::Pending(mut pending_position) = position else {
@@ -1109,16 +1150,19 @@ mod tests {
 
     #[tokio::test]
     async fn stop_sell_reached() {
-        let instrument = CompactString::new("ATOMUSDT");
-        let prices = AHashMap::from([(CompactString::new("USDT"), 1.0)]);
-        let invest_assets = AHashMap::from([(CompactString::new("USDT"), 100342.0)]);
-        let mut order = new_order(instrument, invest_assets, 1.0, OrderSide::Sell);
+        let instrument: InstrumentSymbol = "ATOMUSDT".into();
+        let mut prices = SortedVec::new();
+        prices.insert_or_replace(assets::AssetPrice {price: 1.0, symbol: "USDT".into()});
+        let mut invest_assets = SortedVec::new();
+        invest_assets.insert_or_replace(assets::AssetAmount {amount: 100342.0, symbol: "USDT".into()});
+        
+        let mut order = new_order(instrument.clone(), invest_assets, 1.0, OrderSide::Sell);
         order.desire_price = Some(25000.00);
         let bidask = BidAsk {
             ask: 25900.00,
             bid: 25900.00,
             datetime: DateTimeAsMicroseconds::now(),
-            instrument: CompactString::new("ATOMUSDT"),
+            instrument,
         };
         let position = order.open(&bidask, &prices);
         let Position::Pending(mut pending_position) = position else {
@@ -1133,16 +1177,19 @@ mod tests {
 
     #[tokio::test]
     async fn stop_sell_not_reached() {
-        let instrument = CompactString::new("ATOMUSDT");
-        let prices = AHashMap::from([(CompactString::new("USDT"), 1.0)]);
-        let invest_assets = AHashMap::from([(CompactString::new("USDT"), 100342.0)]);
-        let mut order = new_order(instrument, invest_assets, 1.0, OrderSide::Sell);
+        let instrument: InstrumentSymbol = "ATOMUSDT".into();
+        let mut prices = SortedVec::new();
+        prices.insert_or_replace(assets::AssetPrice {price: 1.0, symbol: "USDT".into()});
+        let mut invest_assets = SortedVec::new();
+        invest_assets.insert_or_replace(assets::AssetAmount {amount: 100342.0, symbol: "USDT".into()});
+        
+        let mut order = new_order(instrument.clone(), invest_assets, 1.0, OrderSide::Sell);
         order.desire_price = Some(25000.00);
         let bidask = BidAsk {
             ask: 25900.00,
             bid: 25900.00,
             datetime: DateTimeAsMicroseconds::now(),
-            instrument: CompactString::new("ATOMUSDT"),
+            instrument,
         };
         let position = order.open(&bidask, &prices);
         let Position::Pending(mut pending_position) = position else {
@@ -1156,17 +1203,17 @@ mod tests {
     }
 
     fn new_order(
-        instrument: CompactString,
-        invest_assets: AHashMap<CompactString, f64>,
+        instrument: InstrumentSymbol,
+        invest_assets: SortedVec<AssetSymbol, assets::AssetAmount>,
         leverage: f64,
         side: OrderSide,
     ) -> Order {
         Order {
-            base_asset: CompactString::new("USDT"),
+            base_asset: "USDT".into(),
             id: "test".to_string(),
             instrument,
             trader_id: "test".to_string(),
-            wallet_id: "test".to_string(),
+            wallet_id: Uuid::new_v4().into(),
             created_date: DateTimeAsMicroseconds::now(),
             desire_price: None,
             funding_fee_period: None,
@@ -1185,7 +1232,7 @@ mod tests {
     fn new_active_position(
         order: Order,
         bidask: &BidAsk,
-        asset_prices: &AHashMap<CompactString, f64>,
+        asset_prices: &SortedVec<AssetSymbol, AssetPrice>,
     ) -> ActivePosition {
         let now = DateTimeAsMicroseconds::now();
 
@@ -1207,7 +1254,7 @@ mod tests {
             top_up_locked: false,
             total_invest_assets: order.invest_assets.clone(),
             order,
-            bonus_invest_assets: Default::default(),
+            bonus_invest_assets: SortedVec::new(),
         }
     }
 }

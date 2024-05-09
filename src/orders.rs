@@ -5,18 +5,22 @@ use crate::{
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 use std::{time::Duration};
-use ahash::AHashMap;
-use compact_str::CompactString;
+use rust_extensions::sorted_vec::SortedVec;
 use uuid::Uuid;
+use crate::assets::{AssetAmount, AssetPrice};
+use crate::asset_symbol::AssetSymbol;
+use crate::instrument_symbol::InstrumentSymbol;
+use crate::position_id::PositionId;
+use crate::wallet_id::WalletId;
 
 #[derive(Debug, Clone)]
 pub struct Order {
     pub id: String,
     pub trader_id: String,
-    pub wallet_id: String,
-    pub instrument: CompactString,
-    pub base_asset: CompactString,
-    pub invest_assets: AHashMap<CompactString, f64>,
+    pub wallet_id: WalletId,
+    pub instrument: InstrumentSymbol,
+    pub base_asset: AssetSymbol,
+    pub invest_assets: SortedVec<AssetSymbol, AssetAmount>,
     pub leverage: f64,
     pub created_date: DateTimeAsMicroseconds,
     pub side: OrderSide,
@@ -53,8 +57,8 @@ pub struct TakeProfitConfig {
 impl TakeProfitConfig {
     pub fn is_triggered(&self, pnl: f64, close_price: f64, side: &OrderSide) -> bool {
         match self.unit {
-            AutoClosePositionUnit::AssetAmount => pnl >= self.value,
-            AutoClosePositionUnit::PriceRate => match side {
+            AutoClosePositionUnit::AssetAmountUnit => pnl >= self.value,
+            AutoClosePositionUnit::PriceRateUnit => match side {
                 OrderSide::Buy => self.value <= close_price,
                 OrderSide::Sell => self.value >= close_price,
             },
@@ -71,8 +75,8 @@ pub struct StopLossConfig {
 impl StopLossConfig {
     pub fn is_triggered(&self, pnl: f64, close_price: f64, side: &OrderSide) -> bool {
         match self.unit {
-            AutoClosePositionUnit::AssetAmount => pnl < 0.0 && pnl.abs() >= self.value,
-            AutoClosePositionUnit::PriceRate => match side {
+            AutoClosePositionUnit::AssetAmountUnit => pnl < 0.0 && pnl.abs() >= self.value,
+            AutoClosePositionUnit::PriceRateUnit => match side {
                 OrderSide::Buy => self.value >= close_price,
                 OrderSide::Sell => self.value <= close_price,
             },
@@ -83,17 +87,17 @@ impl StopLossConfig {
 #[derive(Debug, Clone, IntoPrimitive, TryFromPrimitive)]
 #[repr(i32)]
 pub enum AutoClosePositionUnit {
-    AssetAmount = 0,
-    PriceRate = 1,
+    AssetAmountUnit = 0,
+    PriceRateUnit = 1,
 }
 
 impl Order {
     /// returns vec of instruments invested by order
-    pub fn get_invest_instruments(&self) -> Vec<CompactString> {
+    pub fn get_invest_instruments(&self) -> Vec<InstrumentSymbol> {
         let mut instruments = Vec::with_capacity(self.invest_assets.len());
 
-        for asset in self.invest_assets.keys() {
-            let instrument = BidAsk::generate_id(asset, &self.base_asset);
+        for asset in self.invest_assets.iter() {
+            let instrument = BidAsk::get_instrument_symbol(&asset.symbol, &self.base_asset);
             instruments.push(instrument);
         }
 
@@ -101,12 +105,12 @@ impl Order {
     }
 
     /// returns vec of all possible instruments
-    pub fn get_instruments(&self) -> Vec<CompactString> {
+    pub fn get_instruments(&self) -> Vec<InstrumentSymbol> {
         let mut instruments = Vec::with_capacity(self.invest_assets.len() + 1);
         instruments.push(self.instrument.clone());
 
-        for asset in self.invest_assets.keys() {
-            let instrument = BidAsk::generate_id(asset, &self.base_asset);
+        for asset in self.invest_assets.iter() {
+            let instrument = BidAsk::get_instrument_symbol(&asset.symbol, &self.base_asset);
             instruments.push(instrument);
         }
 
@@ -125,12 +129,12 @@ impl Order {
         Uuid::new_v4().to_string()
     }
 
-    pub fn validate_prices(&self, asset_prices: &AHashMap<CompactString, f64>) -> Result<(), String> {
-        for (asset, _amount) in self.invest_assets.iter() {
-            let price = asset_prices.get(asset);
+    pub fn validate_prices(&self, asset_prices: &SortedVec<AssetSymbol, AssetPrice>) -> Result<(), String> {
+        for item in self.invest_assets.iter() {
+            let price = asset_prices.get(&item.symbol);
 
             if price.is_none() {
-                let message = format!("Not Found price for {}", asset);
+                let message = format!("Not Found price for {}", item.symbol);
                 return Err(message);
             }
         }
@@ -138,15 +142,15 @@ impl Order {
         Ok(())
     }
 
-    pub fn open(self, bidask: &BidAsk, asset_prices: &AHashMap<CompactString, f64>) -> Position {
+    pub fn open(self, bidask: &BidAsk, asset_prices: &SortedVec<AssetSymbol, AssetPrice>) -> Position {
         self.open_with_id(Position::generate_id(), bidask, asset_prices)
     }
 
     pub fn open_with_id(
         self,
-        id: String,
+        id: PositionId,
         bidask: &BidAsk,
-        asset_prices: &AHashMap<CompactString, f64>,
+        asset_prices: &SortedVec<AssetSymbol, AssetPrice>,
     ) -> Position {
         if self.validate_prices(asset_prices).is_err() {
             panic!("Can't open order: invalid prices");
@@ -172,29 +176,29 @@ impl Order {
         invest_amount * self.leverage
     }
 
-    pub fn calculate_invest_amount(&self, asset_prices: &AHashMap<CompactString, f64>) -> f64 {
+    pub fn calculate_invest_amount(&self, asset_prices: &SortedVec<AssetSymbol, AssetPrice>) -> f64 {
         calculate_total_amount(&self.invest_assets, asset_prices)
     }
 
     fn into_active(
         self,
-        id: String,
-        bidask: &BidAsk,
-        asset_prices: &AHashMap<CompactString, f64>,
+        id: PositionId,
+        bid_ask: &BidAsk,
+        asset_prices: &SortedVec<AssetSymbol, AssetPrice>,
     ) -> ActivePosition {
         let now = DateTimeAsMicroseconds::now();
         let mut asset_prices = asset_prices.to_owned();
-        asset_prices.insert(self.base_asset.clone(), 1.0);
+        asset_prices.insert_or_replace(AssetPrice {price: 1.0, symbol: self.base_asset.clone()});
 
         ActivePosition {
             id,
             open_date: now,
-            open_price: bidask.get_open_price(&self.side),
+            open_price: bid_ask.get_open_price(&self.side),
             open_asset_prices: asset_prices.clone(),
-            activate_price: bidask.get_open_price(&self.side),
+            activate_price: bid_ask.get_open_price(&self.side),
             activate_date: now,
             activate_asset_prices: asset_prices.clone(),
-            current_price: bidask.get_close_price(&self.side),
+            current_price: bid_ask.get_close_price(&self.side),
             current_asset_prices: asset_prices,
             last_update_date: now,
             top_ups: Vec::new(),
@@ -204,19 +208,19 @@ impl Order {
             top_up_locked: false,
             total_invest_assets: self.invest_assets.clone(),
             order: self,
-            bonus_invest_assets: Default::default(),
+            bonus_invest_assets: SortedVec::new_with_capacity(0),
         }
     }
 
     fn into_pending(
         self,
-        id: String,
+        id: PositionId,
         bidask: &BidAsk,
-        asset_prices: &AHashMap<CompactString, f64>,
+        asset_prices: &SortedVec<AssetSymbol, AssetPrice>,
     ) -> PendingPosition {
         let now = DateTimeAsMicroseconds::now();
         let mut asset_prices = asset_prices.to_owned();
-        asset_prices.insert(self.base_asset.clone(), 1.0);
+        asset_prices.insert_or_replace(AssetPrice {price: 1.0, symbol: self.base_asset.clone()});
 
         PendingPosition {
             id,
@@ -227,7 +231,7 @@ impl Order {
             current_price: bidask.get_open_price(&self.side),
             last_update_date: now,
             order: self,
-            total_invest_assets: AHashMap::new(),
+            total_invest_assets: SortedVec::new(),
         }
     }
 }

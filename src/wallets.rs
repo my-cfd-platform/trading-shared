@@ -2,38 +2,43 @@ use crate::calculations::calculate_percent;
 use crate::orders::OrderSide;
 use crate::positions::BidAsk;
 use ahash::AHashMap;
-use compact_str::CompactString;
+use rust_extensions::sorted_vec::{EntityWithKey, SortedVec};
+use crate::asset_symbol::AssetSymbol;
+use crate::assets;
+use crate::assets::{AssetAmount, AssetPrice};
+use crate::instrument_symbol::InstrumentSymbol;
+use crate::wallet_id::WalletId;
 
 #[derive(Clone, Debug)]
 pub struct Wallet {
-    pub id: String,
+    pub id: WalletId,
     pub trader_id: String,
     pub total_unlocked_balance: f64,
     pub margin_call_percent: f64,
     pub current_loss_percent: f64,
     prev_loss_percent: f64,
-    estimate_asset: CompactString,
-    balances_by_instruments: AHashMap<CompactString, WalletBalance>,
-    prices_by_assets: AHashMap<CompactString, f64>,
-    top_up_pnls_by_instruments: AHashMap<CompactString, f64>,
-    top_up_reserved_balance_by_instruments: AHashMap<CompactString, f64>,
+    estimate_asset: AssetSymbol,
+    balances_by_instruments: SortedVec<InstrumentSymbol, WalletBalance>,
+    prices_by_assets: SortedVec<AssetSymbol, AssetPrice>,
+    top_up_pnls_by_instruments: AHashMap<InstrumentSymbol, f64>,
+    top_up_reserved_balance_by_instruments: AHashMap<InstrumentSymbol, f64>,
     pub total_top_up_reserved_balance: f64,
 }
 
 impl Wallet {
     pub fn new(
-        id: impl Into<String>,
+        id: WalletId,
         trader_id: impl Into<String>,
-        estimate_asset: impl Into<CompactString>,
+        estimate_asset: AssetSymbol,
         margin_call_percent: f64,
     ) -> Self {
         Self {
-            id: id.into(),
+            id,
             trader_id: trader_id.into(),
             total_unlocked_balance: 0.0,
-            estimate_asset: estimate_asset.into(),
-            balances_by_instruments: Default::default(),
-            prices_by_assets: Default::default(),
+            estimate_asset,
+            balances_by_instruments: SortedVec::new(),
+            prices_by_assets: SortedVec::new(),
             margin_call_percent,
             current_loss_percent: 0.0,
             prev_loss_percent: 0.0,
@@ -45,16 +50,16 @@ impl Wallet {
 
     pub fn set_top_up_reserved(
         &mut self,
-        instrument: &str,
-        instrument_reserved: &AHashMap<CompactString, f64>,
+        instrument: &InstrumentSymbol,
+        instrument_reserved: &SortedVec<AssetSymbol, AssetAmount>,
     ) {
         let mut new_reserved = 0.0;
 
-        for (asset_symbol, asset_amount) in instrument_reserved.iter() {
-            let price = self.prices_by_assets.get(asset_symbol);
+        for item in instrument_reserved.iter() {
+            let price = self.prices_by_assets.get(&item.symbol);
 
             if let Some(price) = price {
-                new_reserved += price * asset_amount;
+                new_reserved += price.price * item.amount;
             }
         }
 
@@ -67,22 +72,22 @@ impl Wallet {
             *old_reserved = new_reserved;
         } else {
             self.top_up_reserved_balance_by_instruments
-                .insert(instrument.into(), new_reserved);
+                .insert(instrument.clone(), new_reserved);
         }
 
         self.total_top_up_reserved_balance += new_reserved;
     }
 
-    pub fn get_instruments(&self) -> Vec<&CompactString> {
-        self.balances_by_instruments.keys().collect()
+    pub fn get_instruments(&self) -> Vec<&InstrumentSymbol> {
+        self.balances_by_instruments.iter().map(|x| &x.instrument_symbol).collect()
     }
 
-    pub fn set_top_up_pnl(&mut self, instrument: &str, instrument_pnl: f64) {
+    pub fn set_top_up_pnl(&mut self, instrument: &InstrumentSymbol, instrument_pnl: f64) {
         self.top_up_pnls_by_instruments
-            .insert(instrument.into(), instrument_pnl);
+            .insert(instrument.clone(), instrument_pnl);
     }
 
-    pub fn deduct_top_up_pnl(&mut self, instrument: &str, instrument_pnl: f64) {
+    pub fn deduct_top_up_pnl(&mut self, instrument: &InstrumentSymbol, instrument_pnl: f64) {
         let pnl = self.top_up_pnls_by_instruments.get_mut(instrument);
 
         if let Some(pnl) = pnl {
@@ -90,14 +95,14 @@ impl Wallet {
         }
     }
 
-    pub fn add_top_up_pnl(&mut self, instrument: &str, instrument_pnl: f64) {
+    pub fn add_top_up_pnl(&mut self, instrument: &InstrumentSymbol, instrument_pnl: f64) {
         let pnl = self.top_up_pnls_by_instruments.get_mut(instrument);
 
         if let Some(pnl) = pnl {
             *pnl += instrument_pnl;
         } else {
             self.top_up_pnls_by_instruments
-                .insert(instrument.into(), instrument_pnl);
+                .insert(instrument.clone(), instrument_pnl);
         }
     }
 
@@ -128,7 +133,7 @@ impl Wallet {
     }
 
     pub fn add_balance(&mut self, balance: WalletBalance, bid_ask: &BidAsk) -> Result<(), String> {
-        let instrument_id = BidAsk::generate_id(&balance.asset_symbol, &self.estimate_asset);
+        let instrument_id = BidAsk::get_instrument_symbol(&balance.asset_symbol, &self.estimate_asset);
 
         if bid_ask.instrument != instrument_id {
             return Err(format!("BidAsk instrument must be {}", instrument_id));
@@ -136,21 +141,20 @@ impl Wallet {
 
         let price = bid_ask.get_asset_price(&balance.asset_symbol, &OrderSide::Sell);
         self.prices_by_assets
-            .insert(balance.asset_symbol.clone(), price);
+            .insert_or_replace(assets::AssetPrice {price, symbol: balance.asset_symbol.clone()});
         let estimate_amount = balance.asset_amount * price;
 
         if !balance.is_locked {
             self.total_unlocked_balance += estimate_amount;
         }
 
-        self.balances_by_instruments.insert(instrument_id, balance);
+        self.balances_by_instruments.insert_or_replace(balance);
 
         Ok(())
     }
 
     pub fn update_balance(&mut self, balance: WalletBalance) -> Result<(), String> {
-        let id = BidAsk::generate_id(&balance.asset_symbol, &self.estimate_asset);
-        let inner_balance = self.balances_by_instruments.remove(&id);
+        let inner_balance = self.balances_by_instruments.remove(&balance.instrument_symbol);
 
         let Some(inner_balance) = inner_balance else {
             return Err("Balance not found".to_string());
@@ -161,11 +165,11 @@ impl Wallet {
                 .prices_by_assets
                 .get(&inner_balance.asset_symbol)
                 .expect("invalid add");
-            self.total_unlocked_balance -= inner_balance.asset_amount * price;
-            self.total_unlocked_balance += balance.asset_amount * price;
+            self.total_unlocked_balance -= inner_balance.asset_amount * price.price;
+            self.total_unlocked_balance += balance.asset_amount * price.price;
         }
 
-        self.balances_by_instruments.insert(id, balance);
+        self.balances_by_instruments.insert_or_replace(balance);
 
         Ok(())
     }
@@ -173,7 +177,7 @@ impl Wallet {
     pub fn set_balance_lock(&mut self, balance_id: &str, is_locked: bool) -> Result<(), String> {
         let inner_balance = self
             .balances_by_instruments
-            .values_mut()
+            .iter_mut()
             .find(|b| b.id == balance_id);
 
         let Some(balance) = inner_balance else {
@@ -190,9 +194,9 @@ impl Wallet {
             .expect("invalid add");
 
         if !balance.is_locked && is_locked {
-            self.total_unlocked_balance -= balance.asset_amount * price;
+            self.total_unlocked_balance -= balance.asset_amount * price.price;
         } else if balance.is_locked && !is_locked {
-            self.total_unlocked_balance += balance.asset_amount * price;
+            self.total_unlocked_balance += balance.asset_amount * price.price;
         }
 
         balance.is_locked = is_locked;
@@ -211,11 +215,11 @@ impl Wallet {
                 .expect("invalid add or update");
 
             if balance.is_locked {
-                self.total_unlocked_balance -= balance.asset_amount * *old_price;
+                self.total_unlocked_balance -= balance.asset_amount * old_price.price;
                 self.total_unlocked_balance += balance.asset_amount * new_price;
             }
 
-            *old_price = new_price;
+            old_price.price = new_price;
         }
     }
 }
@@ -223,7 +227,14 @@ impl Wallet {
 #[derive(Clone, Debug)]
 pub struct WalletBalance {
     pub id: String,
-    pub asset_symbol: CompactString,
+    pub instrument_symbol: InstrumentSymbol,
+    pub asset_symbol: AssetSymbol,
     pub asset_amount: f64,
     pub is_locked: bool,
+}
+
+impl EntityWithKey<InstrumentSymbol> for WalletBalance {
+    fn get_key(&self) -> &InstrumentSymbol {
+        &self.instrument_symbol
+    }
 }

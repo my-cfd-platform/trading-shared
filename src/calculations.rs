@@ -1,7 +1,8 @@
 use crate::{orders::OrderSide, positions::BidAsk};
 use std::collections::HashMap;
-use ahash::AHashMap;
-use compact_str::CompactString;
+use rust_extensions::sorted_vec::SortedVec;
+use crate::asset_symbol::AssetSymbol;
+use crate::assets::{AssetAmount, AssetPrice};
 
 pub fn get_close_price(
     bidasks: &HashMap<String, BidAsk>,
@@ -38,16 +39,16 @@ pub fn calculate_percent(from_number: f64, number: f64) -> f64 {
 }
 
 pub fn calculate_total_amount(
-    asset_amounts: &AHashMap<CompactString, f64>,
-    asset_prices: &AHashMap<CompactString, f64>,
+    asset_amounts: &SortedVec<AssetSymbol, AssetAmount>,
+    asset_prices: &SortedVec<AssetSymbol, AssetPrice>,
 ) -> f64 {
     let mut total_amount = 0.0;
 
-    for (asset, amount) in asset_amounts.iter() {
+    for item in asset_amounts.iter() {
         let price = asset_prices
-            .get(asset)
-            .unwrap_or_else(|| panic!("Price not found for {}", asset));
-        let estimated_amount = price * amount;
+            .get(&item.symbol)
+            .unwrap_or_else(|| panic!("Price not found for {}", item.symbol));
+        let estimated_amount = price.price * item.amount;
         total_amount += estimated_amount;
     }
 

@@ -1,69 +1,82 @@
 use std::mem;
 use crate::positions::{BidAsk, Position};
 use ahash::{AHashMap, AHashSet};
-use compact_str::CompactString;
+use rust_extensions::sorted_vec::{EntityWithKey, SortedVec};
+use crate::asset_symbol::AssetSymbol;
+use crate::assets::AssetPrice;
+use crate::instrument_symbol::InstrumentSymbol;
+use crate::position_id::PositionId;
+use crate::wallet_id::WalletId;
+
+impl EntityWithKey<InstrumentSymbol> for BidAsk {
+    fn get_key(&self) -> &InstrumentSymbol {
+        &self.instrument
+    }
+}
 
 pub struct BidAsksCache {
-    bidasks_by_instruments: AHashMap<CompactString, BidAsk>,
+    items: SortedVec<InstrumentSymbol, BidAsk>,
 }
 
 impl BidAsksCache {
-    pub fn new(bidasks: Vec<BidAsk>) -> Self {
-        let mut map = AHashMap::with_capacity(bidasks.len());
+    pub fn new(src: Vec<BidAsk>) -> Self {
+        let mut items = SortedVec::new_with_capacity(src.len());
 
-        for bidask in bidasks.into_iter() {
-            map.insert(bidask.instrument.clone(), bidask);
+        for item in src.into_iter() {
+            items.insert_or_replace(item);
         }
 
         Self {
-            bidasks_by_instruments: map,
+            items,
         }
     }
 
     pub fn update(&mut self, bidask: BidAsk) {
-        let current_bidask = self.bidasks_by_instruments.get_mut(&bidask.instrument);
+        let current_bidask = self.items.get_mut(&bidask.instrument);
 
         if let Some(current_bidask) = current_bidask {
             _ = mem::replace(current_bidask, bidask);
         } else {
-            self.bidasks_by_instruments
-                .insert(bidask.instrument.clone(), bidask);
+            self.items.insert_or_replace(bidask);
         }
     }
 
-    pub fn get(&self, instrument: &str) -> Option<&BidAsk> {
-        self.bidasks_by_instruments.get(instrument)
+    pub fn get(&self, instrument: &InstrumentSymbol) -> Option<&BidAsk> {
+        self.items.get(instrument)
     }
 
-    pub fn find(&self, base_asset: &str, assets: &[&str]) -> AHashMap<CompactString, BidAsk> {
-        let mut bidasks = AHashMap::with_capacity(assets.len());
+    pub fn find(&self, base_asset: &AssetSymbol, assets: &[&AssetSymbol]) -> SortedVec<InstrumentSymbol, BidAsk> {
+        let mut bidasks = SortedVec::new_with_capacity(assets.len());
 
         for asset in assets.iter() {
-            let instrument = BidAsk::generate_id(asset, base_asset);
-            let bidask = self.bidasks_by_instruments.get(&instrument);
+            let instrument = BidAsk::get_instrument_symbol(asset, base_asset);
+            let bidask = self.items.get(&instrument);
 
             if let Some(bidask) = bidask {
-                bidasks.insert(instrument, bidask.clone());
+                bidasks.insert_or_replace(bidask.to_owned());
             }
         }
 
         bidasks
     }
 
-    pub fn find_prices(&self, to_asset: &str, from_assets: &[&str]) -> AHashMap<CompactString, f64> {
-        let mut prices = AHashMap::with_capacity(from_assets.len());
+    pub fn find_prices(&self, to_asset: &AssetSymbol, from_assets: &[&AssetSymbol]) -> SortedVec<AssetSymbol, AssetPrice> {
+        let mut prices = SortedVec::new_with_capacity(from_assets.len());
 
-        for asset in from_assets.iter() {
+        for asset in from_assets {
+            let symbol = *asset;
+
             if *asset == to_asset {
-                prices.insert(CompactString::new(asset), 1.0);
+                prices.insert_or_replace(AssetPrice {price: 1.0, symbol: symbol.clone()});
+                continue;
             }
 
-            let instrument = BidAsk::generate_id(asset, to_asset);
-            let bidask = self.bidasks_by_instruments.get(&instrument);
+            let instrument = BidAsk::get_instrument_symbol(asset, to_asset);
+            let bidask = self.items.get(&instrument);
 
             if let Some(bidask) = bidask {
                 let price = bidask.get_asset_price(asset, &crate::orders::OrderSide::Sell);
-                prices.insert(CompactString::new(asset), price);
+                prices.insert_or_replace(AssetPrice {price, symbol: symbol.clone()});
             }
         }
 
@@ -72,8 +85,8 @@ impl BidAsksCache {
 }
 
 pub struct PositionsCache {
-    positions_by_ids: AHashMap<String, Position>,
-    ids_by_wallets: AHashMap<String, AHashSet<String>>,
+    positions_by_ids: AHashMap<PositionId, Position>,
+    ids_by_wallets: AHashMap<WalletId, AHashSet<PositionId>>,
 }
 
 impl PositionsCache {
@@ -106,7 +119,7 @@ impl PositionsCache {
         }
     }
 
-    pub fn get_by_wallet_id(&self, wallet_id: &str) -> Vec<&Position> {
+    pub fn get_by_wallet_id(&self, wallet_id: &WalletId) -> Vec<&Position> {
         let ids = self.ids_by_wallets.get(wallet_id);
 
         if let Some(ids) = ids {
@@ -122,15 +135,15 @@ impl PositionsCache {
         Vec::with_capacity(0)
     }
 
-    pub fn contains_by_wallet_id(&self, wallet_id: &str) -> bool {
+    pub fn contains_by_wallet_id(&self, wallet_id: &WalletId) -> bool {
         self.ids_by_wallets.contains_key(wallet_id)
     }
 
-    pub fn get_mut(&mut self, id: &str) -> Option<&mut Position> {
+    pub fn get_mut(&mut self, id: &PositionId) -> Option<&mut Position> {
         self.positions_by_ids.get_mut(id)
     }
 
-    pub fn remove(&mut self, position_id: &str) -> Option<Position> {
+    pub fn remove(&mut self, position_id: &PositionId) -> Option<Position> {
         let position = self.positions_by_ids.remove(position_id);
 
         if let Some(position) = position.as_ref() {
@@ -146,14 +159,14 @@ impl PositionsCache {
 #[cfg(test)]
 mod tests {
     use rust_extensions::date_time::DateTimeAsMicroseconds;
-
-    use super::PositionsCache;
+    use super::{PositionsCache};
     use crate::{
         orders::Order,
         positions::{BidAsk, Position},
     };
-    use ahash::AHashMap;
-    use compact_str::CompactString;
+    use rust_extensions::sorted_vec::SortedVec;
+    use uuid::Uuid;
+    use crate::assets::{AssetAmount, AssetPrice};
 
     #[test]
     fn positions_cache_is_empty() {
@@ -201,17 +214,18 @@ mod tests {
     }
 
     fn new_position() -> Position {
-        let invest_asset = (CompactString::new("BTC"), 100.0);
+        let mut invest_assets = SortedVec::new();
+        invest_assets.insert_or_replace(AssetAmount {amount: 100.0, symbol: "BTC".into()});
         let order = Order {
-            base_asset: CompactString::new("USDT"),
+            base_asset: "USDT".into(),
             id: "test".to_string(),
-            instrument: CompactString::new("ATOMUSDT"),
+            instrument: "ATOMUSDT".into(),
             trader_id: "test".to_string(),
-            wallet_id: "test".to_string(),
+            wallet_id: Uuid::new_v4().into(),
             created_date: DateTimeAsMicroseconds::now(),
             desire_price: None,
             funding_fee_period: None,
-            invest_assets: AHashMap::from([invest_asset]),
+            invest_assets,
             leverage: 1.0,
             side: crate::orders::OrderSide::Buy,
             take_profit: None,
@@ -221,12 +235,13 @@ mod tests {
             top_up_enabled: false,
             top_up_percent: 10.0,
         };
-        let prices = AHashMap::from([(CompactString::new("BTC"), 22300.0)]);
+        let mut prices = SortedVec::new();
+        prices.insert_or_replace(AssetPrice {price: 22300.0, symbol: "BTC".into()});
         let bidask = BidAsk {
             ask: 14.748,
             bid: 14.748,
             datetime: DateTimeAsMicroseconds::now(),
-            instrument: CompactString::new("ATOMUSDT"),
+            instrument: "ATOMUSDT".into(),
         };
 
         order.open(&bidask, &prices)

@@ -7,17 +7,22 @@ use crate::{
 };
 use ahash::{AHashMap, AHashSet};
 use std::time::Duration;
-use compact_str::CompactString;
+use rust_extensions::sorted_vec::SortedVec;
+use crate::asset_symbol::AssetSymbol;
+use crate::assets::AssetAmount;
+use crate::instrument_symbol::InstrumentSymbol;
+use crate::position_id::PositionId;
+use crate::wallet_id::WalletId;
 
 pub struct PositionsMonitor {
     positions_cache: PositionsCache,
-    ids_by_instruments: AHashMap<CompactString, AHashSet<String>>,
+    ids_by_instruments: AHashMap<InstrumentSymbol, AHashSet<PositionId>>,
     cancel_top_up_delay: Duration,
     cancel_top_up_price_change_percent: f64,
-    locked_ids: AHashSet<String>,
+    locked_ids: AHashSet<PositionId>,
     pnl_accuracy: Option<u32>,
-    wallets_by_ids: AHashMap<String, Wallet>,
-    wallet_ids_by_instruments: AHashMap<CompactString, AHashSet<String>>,
+    wallets_by_ids: AHashMap<WalletId, Wallet>,
+    wallet_ids_by_instruments: AHashMap<InstrumentSymbol, AHashSet<WalletId>>,
 }
 
 impl PositionsMonitor {
@@ -43,7 +48,7 @@ impl PositionsMonitor {
         self.positions_cache.count()
     }
 
-    pub fn get_wallet_mut(&mut self, wallet_id: &str) -> Option<&mut Wallet> {
+    pub fn get_wallet_mut(&mut self, wallet_id: &WalletId) -> Option<&mut Wallet> {
         let wallet = self.wallets_by_ids.get_mut(wallet_id);
 
         if let Some(wallet) = wallet {
@@ -53,11 +58,11 @@ impl PositionsMonitor {
         None
     }
 
-    pub fn contains_wallet(&self, wallet_id: &str) -> bool {
+    pub fn contains_wallet(&self, wallet_id: &WalletId) -> bool {
         self.wallets_by_ids.contains_key(wallet_id)
     }
 
-    pub fn remove(&mut self, position_id: &str) -> Option<Position> {
+    pub fn remove(&mut self, position_id: &PositionId) -> Option<Position> {
         if self.locked_ids.contains(position_id) {
             return None;
         }
@@ -98,7 +103,7 @@ impl PositionsMonitor {
         position
     }
 
-    pub fn remove_wallet(&mut self, wallet_id: &str) -> Option<Wallet> {
+    pub fn remove_wallet(&mut self, wallet_id: &WalletId) -> Option<Wallet> {
         let wallet = self.wallets_by_ids.remove(wallet_id);
 
         if let Some(wallet) = wallet {
@@ -133,7 +138,7 @@ impl PositionsMonitor {
 
     pub fn update_wallet(
         &mut self,
-        wallet_id: &str,
+        wallet_id: &WalletId,
         balance: WalletBalance,
     ) -> Result<Option<Wallet>, String> {
         let wallet = self.wallets_by_ids.get_mut(wallet_id);
@@ -163,11 +168,11 @@ impl PositionsMonitor {
         self.positions_cache.add(position);
     }
 
-    pub fn get_by_wallet_id(&self, wallet_id: &str) -> Vec<&Position> {
+    pub fn get_by_wallet_id(&self, wallet_id: &WalletId) -> Vec<&Position> {
         self.positions_cache.get_by_wallet_id(wallet_id)
     }
 
-    pub fn unlock(&mut self, position_id: &str) {
+    pub fn unlock(&mut self, position_id: &PositionId) {
         self.locked_ids.remove(position_id);
     }
 
@@ -192,7 +197,7 @@ impl PositionsMonitor {
         }
     }
 
-    pub fn get_mut(&mut self, id: &str) -> Option<&mut Position> {
+    pub fn get_mut(&mut self, id: &PositionId) -> Option<&mut Position> {
         self.positions_cache.get_mut(id)
     }
 
@@ -204,10 +209,10 @@ impl PositionsMonitor {
         };
 
         let mut events = Vec::with_capacity(position_ids.len());
-        let mut top_up_pnls_by_wallet_ids: AHashMap<String, f64> =
+        let mut top_up_pnls_by_wallet_ids: AHashMap<WalletId, f64> =
             AHashMap::with_capacity(position_ids.len() / 2);
         let mut wallet_ids_to_remove = Vec::with_capacity(position_ids.len() / 3);
-        let mut top_up_reserved_by_wallet_ids: AHashMap<String, AHashMap<CompactString, f64>> =
+        let mut top_up_reserved_by_wallet_ids: AHashMap<WalletId, SortedVec<AssetSymbol, AssetAmount>> =
             AHashMap::with_capacity(position_ids.len() / 2);
 
         position_ids.retain(|position_id| {
@@ -329,16 +334,16 @@ impl PositionsMonitor {
                                 top_up_reserved_by_wallet_ids.get_mut(&position.order.wallet_id);
 
                             if let Some(reserved_by_assets) = reserved_by_assets {
-                                for (asset_symbol, asset_amount) in
+                                for item in
                                     position.total_invest_assets.iter()
                                 {
-                                    let reserved_amount = reserved_by_assets.get_mut(asset_symbol);
+                                    let reserved_amount = reserved_by_assets.get_mut(&item.symbol);
 
                                     if let Some(reserved_amount) = reserved_amount {
-                                        *reserved_amount += asset_amount;
+                                        reserved_amount.amount += item.amount;
                                     } else {
                                         reserved_by_assets
-                                            .insert(asset_symbol.to_owned(), *asset_amount);
+                                            .insert_or_replace(AssetAmount{amount:item.amount, symbol:item.symbol.clone()});
                                     }
                                 }
                             } else {
@@ -387,7 +392,7 @@ impl PositionsMonitor {
     fn update_wallet_reserved(
         &mut self,
         bidask: &BidAsk,
-        reserved_by_wallet_ids: &AHashMap<String, AHashMap<CompactString, f64>>,
+        reserved_by_wallet_ids: &AHashMap<WalletId, SortedVec<AssetSymbol, AssetAmount>>,
     ) {
         for (wallet_id, reserved_by_assets) in reserved_by_wallet_ids {
             let wallet = self.wallets_by_ids.get_mut(wallet_id);
@@ -403,7 +408,7 @@ impl PositionsMonitor {
     fn update_wallet_pnls(
         &mut self,
         bidask: &BidAsk,
-        pnls_by_wallet_ids: AHashMap<String, f64>,
+        pnls_by_wallet_ids: AHashMap<WalletId, f64>,
     ) -> Vec<PositionMonitoringEvent> {
         let mut events = Vec::new();
 
@@ -460,7 +465,7 @@ pub enum PositionLockReason {
 pub struct WalletMarginCallInfo {
     pub loss_percent: f64,
     pub pnl: f64,
-    pub wallet_id: String,
+    pub wallet_id: WalletId,
     pub trader_id: String,
 }
 
