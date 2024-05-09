@@ -17,6 +17,13 @@ impl From<String> for InstrumentSymbol {
     }
 }
 
+impl From<&String> for InstrumentSymbol {
+    fn from(value: &String) -> Self {
+        InstrumentSymbol(value.into())
+    }
+}
+
+
 impl Display for InstrumentSymbol {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0.to_string())

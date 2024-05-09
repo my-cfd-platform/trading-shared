@@ -16,6 +16,12 @@ impl From<Uuid> for PositionId {
     }
 }
 
+impl From<&String> for PositionId {
+    fn from(value: &String) -> Self {
+        PositionId(Uuid::parse_str(value).expect("invalid position id"))
+    }
+}
+
 impl From<String> for PositionId {
     fn from(value: String) -> Self {
         PositionId(Uuid::parse_str(&value).expect("invalid position id"))

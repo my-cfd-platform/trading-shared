@@ -17,6 +17,12 @@ impl From<String> for AssetSymbol {
     }
 }
 
+impl From<&String> for AssetSymbol {
+    fn from(value: &String) -> Self {
+        AssetSymbol(value.into())
+    }
+}
+
 impl Display for AssetSymbol {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0.to_string())

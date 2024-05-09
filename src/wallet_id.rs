@@ -10,6 +10,12 @@ impl From<&str> for WalletId {
     }
 }
 
+impl From<&String> for WalletId {
+    fn from(value: &String) -> Self {
+        WalletId(Uuid::parse_str(value).expect("invalid wallet id"))
+    }
+}
+
 impl From<String> for WalletId {
     fn from(value: String) -> Self {
         WalletId(Uuid::parse_str(&value).expect("invalid wallet id"))
