@@ -1,14 +1,15 @@
-use std::collections::HashMap;
+use ahash::AHashMap;
+use compact_str::CompactString;
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 
 #[derive(Debug, Clone)]
 pub struct ActiveTopUp {
     pub id: String,
     pub date: DateTimeAsMicroseconds,
-    pub total_assets: HashMap<String, f64>,
+    pub total_assets: AHashMap<CompactString, f64>,
     pub instrument_price: f64,
-    pub asset_prices: HashMap<String, f64>,
-    pub bonus_assets: HashMap<String, f64>,
+    pub asset_prices: AHashMap<CompactString, f64>,
+    pub bonus_assets: AHashMap<CompactString, f64>,
 }
 
 impl ActiveTopUp {
@@ -30,10 +31,10 @@ impl ActiveTopUp {
 pub struct CanceledTopUp {
     pub id: String,
     pub date: DateTimeAsMicroseconds,
-    pub total_assets: HashMap<String, f64>,
+    pub total_assets: AHashMap<CompactString, f64>,
     pub instrument_price: f64,
-    pub asset_prices: HashMap<String, f64>,
+    pub asset_prices: AHashMap<CompactString, f64>,
     pub cancel_instrument_price: f64,
     pub cancel_date: DateTimeAsMicroseconds,
-    pub bonus_assets: HashMap<String, f64>,
+    pub bonus_assets:AHashMap<CompactString, f64>,
 }

@@ -2,9 +2,10 @@ use std::collections::HashMap;
 use std::mem;
 use crate::positions::{BidAsk, Position};
 use ahash::{AHashMap, AHashSet};
+use compact_str::CompactString;
 
 pub struct BidAsksCache {
-    bidasks_by_instruments: AHashMap<String, BidAsk>,
+    bidasks_by_instruments: AHashMap<CompactString, BidAsk>,
 }
 
 impl BidAsksCache {
@@ -35,8 +36,8 @@ impl BidAsksCache {
         self.bidasks_by_instruments.get(instrument)
     }
 
-    pub fn find(&self, base_asset: &str, assets: &[&String]) -> HashMap<String, BidAsk> {
-        let mut bidasks = HashMap::with_capacity(assets.len());
+    pub fn find(&self, base_asset: &str, assets: &[&String]) -> AHashMap<CompactString, BidAsk> {
+        let mut bidasks = AHashMap::with_capacity(assets.len());
 
         for asset in assets.iter() {
             let instrument = BidAsk::generate_id(asset, base_asset);
@@ -148,7 +149,8 @@ mod tests {
         orders::Order,
         positions::{BidAsk, Position},
     };
-    use std::collections::HashMap;
+    use ahash::AHashMap;
+    use compact_str::CompactString;
 
     #[test]
     fn positions_cache_is_empty() {
@@ -196,17 +198,17 @@ mod tests {
     }
 
     fn new_position() -> Position {
-        let invest_asset = ("BTC".to_string(), 100.0);
+        let invest_asset = (CompactString::new("BTC"), 100.0);
         let order = Order {
-            base_asset: "USDT".to_string(),
+            base_asset: CompactString::new("USDT"),
             id: "test".to_string(),
-            instrument: "ATOMUSDT".to_string(),
+            instrument: CompactString::new("ATOMUSDT"),
             trader_id: "test".to_string(),
             wallet_id: "test".to_string(),
             created_date: DateTimeAsMicroseconds::now(),
             desire_price: None,
             funding_fee_period: None,
-            invest_assets: HashMap::from([invest_asset]),
+            invest_assets: AHashMap::from([invest_asset]),
             leverage: 1.0,
             side: crate::orders::OrderSide::Buy,
             take_profit: None,
@@ -216,12 +218,12 @@ mod tests {
             top_up_enabled: false,
             top_up_percent: 10.0,
         };
-        let prices = HashMap::from([("BTC".to_string(), 22300.0)]);
+        let prices = AHashMap::from([(CompactString::new("BTC"), 22300.0)]);
         let bidask = BidAsk {
             ask: 14.748,
             bid: 14.748,
             datetime: DateTimeAsMicroseconds::now(),
-            instrument: "ATOMUSDT".to_string(),
+            instrument: CompactString::new("ATOMUSDT"),
         };
 
         order.open(&bidask, &prices)

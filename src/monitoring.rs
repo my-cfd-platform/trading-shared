@@ -6,18 +6,18 @@ use crate::{
     positions::{ActivePosition, BidAsk, ClosedPosition, Position},
 };
 use ahash::{AHashMap, AHashSet};
-use std::collections::HashMap;
 use std::time::Duration;
+use compact_str::CompactString;
 
 pub struct PositionsMonitor {
     positions_cache: PositionsCache,
-    ids_by_instruments: AHashMap<String, AHashSet<String>>,
+    ids_by_instruments: AHashMap<CompactString, AHashSet<String>>,
     cancel_top_up_delay: Duration,
     cancel_top_up_price_change_percent: f64,
     locked_ids: AHashSet<String>,
     pnl_accuracy: Option<u32>,
     wallets_by_ids: AHashMap<String, Wallet>,
-    wallet_ids_by_instruments: AHashMap<String, AHashSet<String>>,
+    wallet_ids_by_instruments: AHashMap<CompactString, AHashSet<String>>,
 }
 
 impl PositionsMonitor {
@@ -203,7 +203,7 @@ impl PositionsMonitor {
         let mut top_up_pnls_by_wallet_ids: AHashMap<String, f64> =
             AHashMap::with_capacity(position_ids.len() / 2);
         let mut wallet_ids_to_remove = Vec::with_capacity(position_ids.len() / 3);
-        let mut top_up_reserved_by_wallet_ids: AHashMap<String, HashMap<String, f64>> =
+        let mut top_up_reserved_by_wallet_ids: AHashMap<String, AHashMap<CompactString, f64>> =
             AHashMap::with_capacity(position_ids.len() / 2);
 
         position_ids.retain(|position_id| {
@@ -383,7 +383,7 @@ impl PositionsMonitor {
     fn update_wallet_reserved(
         &mut self,
         bidask: &BidAsk,
-        reserved_by_wallet_ids: &AHashMap<String, HashMap<String, f64>>,
+        reserved_by_wallet_ids: &AHashMap<String, AHashMap<CompactString, f64>>,
     ) {
         for (wallet_id, reserved_by_assets) in reserved_by_wallet_ids {
             let wallet = self.wallets_by_ids.get_mut(wallet_id);

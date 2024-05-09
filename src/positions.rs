@@ -6,9 +6,9 @@ use crate::{
 };
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use rust_extensions::date_time::DateTimeAsMicroseconds;
-use std::collections::HashMap;
 use std::time::Duration;
-use ahash::AHashSet;
+use ahash::{AHashMap, AHashSet};
+use compact_str::CompactString;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, IntoPrimitive, TryFromPrimitive)]
@@ -24,26 +24,26 @@ pub enum ClosePositionReason {
 
 #[derive(Clone)]
 pub struct BidAsk {
-    pub instrument: String,
+    pub instrument: CompactString,
     pub datetime: DateTimeAsMicroseconds,
     pub bid: f64,
     pub ask: f64,
 }
 
 impl BidAsk {
-    pub fn new_synthetic(id: impl Into<String>, bid: f64, ask: f64) -> Self {
+    pub fn new_synthetic(id: CompactString, bid: f64, ask: f64) -> Self {
         Self {
-            instrument: id.into(),
+            instrument: id,
             datetime: DateTimeAsMicroseconds::now(),
             bid,
             ask,
         }
     }
 
-    pub fn generate_id(base_asset: &str, quote_asset: &str) -> String {
+    pub fn generate_id(base_asset: &str, quote_asset: &str) -> CompactString {
         let id = format!("{}{}", base_asset, quote_asset); // todo: find better solution
 
-        id
+        id.into()
     }
 
     pub fn get_close_price(&self, side: &OrderSide) -> f64 {
@@ -100,7 +100,7 @@ impl Position {
         }
     }
 
-    pub fn get_open_asset_prices(&self) -> &HashMap<String, f64> {
+    pub fn get_open_asset_prices(&self) -> &AHashMap<CompactString, f64> {
         match self {
             Position::Active(position) => &position.open_asset_prices,
             Position::Closed(position) => &position.open_asset_prices,
@@ -132,7 +132,7 @@ impl Position {
         }
     }
 
-    pub fn get_instruments(&self) -> AHashSet<String> {
+    pub fn get_instruments(&self) -> AHashSet<CompactString> {
         match self {
             Position::Pending(position) => position.order.get_instruments().into_iter().collect(),
             Position::Active(position) => {
@@ -152,12 +152,12 @@ impl Position {
         }
     }
 
-    fn get_top_up_instruments(&self, top_ups: &Vec<ActiveTopUp>) -> AHashSet<String> {
+    fn get_top_up_instruments(&self, top_ups: &Vec<ActiveTopUp>) -> AHashSet<CompactString> {
         let mut instruments = AHashSet::new();
 
         for top_up in top_ups {
             for (asset_symbol, _asset_amount) in top_up.total_assets.iter() {
-                let instrument = format!("{}{}", asset_symbol, self.get_order().base_asset);
+                let instrument = BidAsk::generate_id(&asset_symbol, &self.get_order().base_asset);
                 instruments.insert(instrument);
             }
         }
@@ -181,11 +181,11 @@ pub struct PendingPosition {
     pub order: Order,
     pub open_price: f64,
     pub open_date: DateTimeAsMicroseconds,
-    pub open_asset_prices: HashMap<String, f64>,
+    pub open_asset_prices: AHashMap<CompactString, f64>,
     pub current_price: f64,
-    pub current_asset_prices: HashMap<String, f64>,
+    pub current_asset_prices: AHashMap<CompactString, f64>,
     pub last_update_date: DateTimeAsMicroseconds,
-    pub total_invest_assets: HashMap<String, f64>,
+    pub total_invest_assets: AHashMap<CompactString, f64>,
 }
 
 impl PendingPosition {
@@ -319,7 +319,7 @@ impl PendingPosition {
 
     pub fn add_invest_assets(
         &mut self,
-        amounts_by_assets: &HashMap<String, f64>,
+        amounts_by_assets: &AHashMap<CompactString, f64>,
     ) -> Result<(), String> {
         for (asset_symbol, asset_amount) in amounts_by_assets {
             if !self.open_asset_prices.contains_key(asset_symbol) {
@@ -345,13 +345,13 @@ impl PendingPosition {
     pub fn close(self, reason: ClosePositionReason) -> ClosedPosition {
         ClosedPosition {
             pnl: None,
-            asset_pnls: HashMap::new(),
+            asset_pnls: AHashMap::new(),
             open_price: self.open_price,
             open_date: self.open_date,
             open_asset_prices: self.open_asset_prices,
             activate_date: None,
             activate_price: None,
-            activate_asset_prices: HashMap::new(),
+            activate_asset_prices: AHashMap::new(),
             close_date: DateTimeAsMicroseconds::now(),
             close_price: self.current_price,
             close_reason: reason,
@@ -371,20 +371,20 @@ pub struct ActivePosition {
     pub order: Order,
     pub open_price: f64,
     pub open_date: DateTimeAsMicroseconds,
-    pub open_asset_prices: HashMap<String, f64>,
+    pub open_asset_prices: AHashMap<CompactString, f64>,
     pub activate_price: f64,
     pub activate_date: DateTimeAsMicroseconds,
-    pub activate_asset_prices: HashMap<String, f64>,
+    pub activate_asset_prices: AHashMap<CompactString, f64>,
     pub current_price: f64,
-    pub current_asset_prices: HashMap<String, f64>,
+    pub current_asset_prices: AHashMap<CompactString, f64>,
     pub last_update_date: DateTimeAsMicroseconds,
     pub top_ups: Vec<ActiveTopUp>,
     pub current_pnl: f64,
     pub current_loss_percent: f64,
     pub prev_loss_percent: f64,
     pub top_up_locked: bool,
-    pub total_invest_assets: HashMap<String, f64>,
-    pub bonus_invest_assets: HashMap<String, f64>,
+    pub total_invest_assets: AHashMap<CompactString, f64>,
+    pub bonus_invest_assets: AHashMap<CompactString, f64>,
 }
 
 impl ActivePosition {
@@ -661,8 +661,8 @@ impl ActivePosition {
     }
 
     /// Calculates total asset amounts invested to position. Including order and all active top-ups
-    pub fn calc_total_invest_assets(&self) -> HashMap<String, f64> {
-        let mut amounts = HashMap::with_capacity(self.order.invest_assets.len() + 5);
+    pub fn calc_total_invest_assets(&self) -> AHashMap<CompactString, f64> {
+        let mut amounts = AHashMap::with_capacity(self.order.invest_assets.len() + 5);
 
         for (asset, amount) in self.order.invest_assets.iter() {
             let total_amount = amounts.get_mut(asset);
@@ -688,8 +688,8 @@ impl ActivePosition {
     }
 
     /// Calculates pnl by all invested assets, includes order, and top-ups
-    pub fn calc_pnls_by_assets(&self, pnl_accuracy: Option<u32>) -> HashMap<String, f64> {
-        let mut asset_pnls = HashMap::with_capacity(self.order.invest_assets.len() + 5);
+    pub fn calc_pnls_by_assets(&self, pnl_accuracy: Option<u32>) -> AHashMap<CompactString, f64> {
+        let mut asset_pnls = AHashMap::with_capacity(self.order.invest_assets.len() + 5);
 
         for (asset, amount) in self.calc_order_pnls_by_assets().into_iter() {
             let asset_pnl = asset_pnls.get_mut(&asset);
@@ -735,8 +735,8 @@ impl ActivePosition {
     }
 
     /// Calculates pnl by invested assets initially in order
-    pub fn calc_order_pnls_by_assets(&self) -> HashMap<String, f64> {
-        let mut pnls_by_assets = HashMap::with_capacity(self.order.invest_assets.len());
+    pub fn calc_order_pnls_by_assets(&self) -> AHashMap<CompactString, f64> {
+        let mut pnls_by_assets = AHashMap::with_capacity(self.order.invest_assets.len());
 
         for (asset, amount) in self.order.invest_assets.iter() {
             let pnl = self.calculate_pnl(*amount, self.activate_price);
@@ -748,8 +748,8 @@ impl ActivePosition {
     }
 
     /// Calculates pnl by invested assets in top-ups
-    pub fn calc_top_ups_pnls_by_assets(&self) -> HashMap<String, f64> {
-        let mut pnls_by_assets = HashMap::with_capacity(10);
+    pub fn calc_top_ups_pnls_by_assets(&self) -> AHashMap<CompactString, f64> {
+        let mut pnls_by_assets = AHashMap::with_capacity(10);
 
         for top_up in self.top_ups.iter() {
             for (asset, amount) in top_up.total_assets.iter() {
@@ -780,19 +780,19 @@ pub struct ClosedPosition {
     pub order: Order,
     pub open_price: f64,
     pub open_date: DateTimeAsMicroseconds,
-    pub open_asset_prices: HashMap<String, f64>,
+    pub open_asset_prices: AHashMap<CompactString, f64>,
     pub activate_price: Option<f64>,
     pub activate_date: Option<DateTimeAsMicroseconds>,
-    pub activate_asset_prices: HashMap<String, f64>,
+    pub activate_asset_prices: AHashMap<CompactString, f64>,
     pub close_price: f64,
     pub close_date: DateTimeAsMicroseconds,
     pub close_reason: ClosePositionReason,
-    pub close_asset_prices: HashMap<String, f64>,
+    pub close_asset_prices: AHashMap<CompactString, f64>,
     pub pnl: Option<f64>,
-    pub asset_pnls: HashMap<String, f64>,
+    pub asset_pnls: AHashMap<CompactString, f64>,
     pub top_ups: Vec<ActiveTopUp>,
-    pub total_invest_assets: HashMap<String, f64>,
-    pub invest_bonus_assets: HashMap<String, f64>,
+    pub total_invest_assets: AHashMap<CompactString, f64>,
+    pub invest_bonus_assets: AHashMap<CompactString, f64>,
 }
 
 impl ClosedPosition {
@@ -813,21 +813,22 @@ mod tests {
         positions::{BidAsk, Position},
     };
     use rust_extensions::date_time::DateTimeAsMicroseconds;
-    use std::collections::HashMap;
+    use ahash::AHashMap;
+    use compact_str::CompactString;
     use crate::top_ups::ActiveTopUp;
 
     #[tokio::test]
     async fn close_active_position() {
         let order = Order {
-            base_asset: "USDT".to_string(),
+            base_asset: CompactString::new("USDT"),
             id: "test".to_string(),
-            instrument: "ATOMUSDT".to_string(),
+            instrument: CompactString::new("ATOMUSDT"),
             trader_id: "test".to_string(),
             wallet_id: "test".to_string(),
             created_date: DateTimeAsMicroseconds::now(),
             desire_price: None,
             funding_fee_period: None,
-            invest_assets: HashMap::from([("BTC".to_string(), 100.0)]),
+            invest_assets: AHashMap::from([(CompactString::new("BTC"), 100.0)]),
             leverage: 1.0,
             side: OrderSide::Buy,
             take_profit: None,
@@ -837,12 +838,12 @@ mod tests {
             top_up_enabled: false,
             top_up_percent: 10.0,
         };
-        let prices = HashMap::from([("BTC".to_string(), 22300.0)]);
+        let prices = AHashMap::from([(CompactString::new("BTC"), 22300.0)]);
         let bidask = BidAsk {
             ask: 14.748,
             bid: 14.748,
             datetime: DateTimeAsMicroseconds::now(),
-            instrument: "ATOMUSDT".to_string(),
+            instrument: CompactString::new("ATOMUSDT"),
         };
         let position = order.open(&bidask, &prices);
         let mut position = match position {
@@ -865,15 +866,15 @@ mod tests {
 
     #[tokio::test]
     async fn close_by_tp() {
-        let instrument = "ATOMUSDT".to_string();
-        let prices = HashMap::from([("USDT".to_string(), 1.0)]);
-        let invest_assets = HashMap::from([("USDT".to_string(), 100342.0)]);
+        let instrument = CompactString::new("ATOMUSDT");
+        let prices = AHashMap::from([(CompactString::new("USDT"), 1.0)]);
+        let invest_assets = AHashMap::from([(CompactString::new("USDT"), 100342.0)]);
         let order = new_order(instrument, invest_assets, 1.0, OrderSide::Sell);
         let bidask = BidAsk {
             ask: 13.815,
             bid: 13.815,
             datetime: DateTimeAsMicroseconds::now(),
-            instrument: "ATOMUSDT".to_string(),
+            instrument: CompactString::new("ATOMUSDT"),
         };
         let mut position = new_active_position(order, &bidask, &prices);
         let take_profit = TakeProfitConfig {
@@ -892,23 +893,23 @@ mod tests {
 
     #[tokio::test]
     async fn calc_pnl_with_top_ups_2() {
-        let instrument = "ATOMUSDT".to_string();
-        let prices = HashMap::from([("USDT".to_string(), 1.0)]);
-        let invest_assets = HashMap::from([("USDT".to_string(), 100.0)]);
+        let instrument = CompactString::new("ATOMUSDT");
+        let prices = AHashMap::from([(CompactString::new("USDT"), 1.0)]);
+        let invest_assets = AHashMap::from([(CompactString::new("USDT"), 100.0)]);
         let mut order = new_order(instrument, invest_assets, 10.0, OrderSide::Sell);
         order.top_up_enabled = true;
         let bidask = BidAsk {
             ask: 0.37,
             bid: 0.37,
             datetime: DateTimeAsMicroseconds::now(),
-            instrument: "ATOMUSDT".to_string(),
+            instrument: CompactString::new("ATOMUSDT"),
         };
         let mut position = new_active_position(order, &bidask, &prices);
         position.update(&BidAsk {
             ask: 0.37,
             bid: 0.37,
             datetime: DateTimeAsMicroseconds::now(),
-            instrument: "ATOMUSDT".to_string(),
+            instrument: CompactString::new("ATOMUSDT"),
         });
 
         assert_eq!(0.0, position.current_pnl);
@@ -916,22 +917,22 @@ mod tests {
 
     #[tokio::test]
     async fn calc_pnl_with_top_ups() {
-        let instrument = "ATOMUSDT".to_string();
-        let prices = HashMap::from([("USDT".to_string(), 1.0)]);
-        let invest_assets = HashMap::from([("USDT".to_string(), 100.0)]);
+        let instrument = CompactString::new("ATOMUSDT");
+        let prices = AHashMap::from([(CompactString::new("USDT"), 1.0)]);
+        let invest_assets = AHashMap::from([(CompactString::new("USDT"), 100.0)]);
         let mut order = new_order(instrument, invest_assets, 10.0, OrderSide::Sell);
         order.top_up_enabled = true;
         let bidask = BidAsk {
             ask: 0.33,
             bid: 0.33,
             datetime: DateTimeAsMicroseconds::now(),
-            instrument: "ATOMUSDT".to_string(),
+            instrument: CompactString::new("ATOMUSDT"),
         };
         let mut position = new_active_position(order, &bidask, &prices);
         position.add_top_up(ActiveTopUp {
             id: "1".to_string(),
             date: DateTimeAsMicroseconds::now(),
-            total_assets: HashMap::from([("USDT".to_string(), 50.0)]),
+            total_assets: AHashMap::from([(CompactString::new("USDT"), 50.0)]),
             instrument_price: 0.354,
             asset_prices: prices.clone(),
             bonus_assets: Default::default(),
@@ -939,7 +940,7 @@ mod tests {
         position.add_top_up(ActiveTopUp {
             id: "2".to_string(),
             date: DateTimeAsMicroseconds::now(),
-            total_assets: HashMap::from([("USDT".to_string(), 75.0)]),
+            total_assets: AHashMap::from([(CompactString::new("USDT"), 75.0)]),
             instrument_price: 0.355,
             asset_prices: prices.clone(),
             bonus_assets: Default::default(),
@@ -947,7 +948,7 @@ mod tests {
         position.add_top_up(ActiveTopUp {
             id: "3".to_string(),
             date: DateTimeAsMicroseconds::now(),
-            total_assets: HashMap::from([("USDT".to_string(), 112.5)]),
+            total_assets: AHashMap::from([(CompactString::new("USDT"), 112.5)]),
             instrument_price: 0.37,
             asset_prices: prices,
             bonus_assets: Default::default(),
@@ -956,7 +957,7 @@ mod tests {
             ask: 0.37,
             bid: 0.37,
             datetime: DateTimeAsMicroseconds::now(),
-            instrument: "ATOMUSDT".to_string(),
+            instrument: CompactString::new("ATOMUSDT"),
         });
 
         println!("{}", position.current_pnl);
@@ -966,16 +967,16 @@ mod tests {
 
     #[tokio::test]
     async fn stop_buy_not_reached() {
-        let instrument = "ATOMUSDT".to_string();
-        let prices = HashMap::from([("USDT".to_string(), 1.0)]);
-        let invest_assets = HashMap::from([("USDT".to_string(), 100342.0)]);
+        let instrument = CompactString::new("ATOMUSDT");
+        let prices = AHashMap::from([(CompactString::new("USDT"), 1.0)]);
+        let invest_assets = AHashMap::from([(CompactString::new("USDT"), 100342.0)]);
         let mut order = new_order(instrument, invest_assets, 1.0, OrderSide::Buy);
         order.desire_price = Some(26000.00);
         let bidask = BidAsk {
             ask: 25900.00,
             bid: 25900.00,
             datetime: DateTimeAsMicroseconds::now(),
-            instrument: "ATOMUSDT".to_string(),
+            instrument: CompactString::new("ATOMUSDT"),
         };
         let position = order.open(&bidask, &prices);
         let Position::Pending(pending_position) = position else {
@@ -989,16 +990,16 @@ mod tests {
 
     #[tokio::test]
     async fn stop_buy_reached() {
-        let instrument = "ATOMUSDT".to_string();
-        let prices = HashMap::from([("USDT".to_string(), 1.0)]);
-        let invest_assets = HashMap::from([("USDT".to_string(), 100342.0)]);
+        let instrument = CompactString::new("ATOMUSDT");
+        let prices = AHashMap::from([(CompactString::new("USDT"), 1.0)]);
+        let invest_assets = AHashMap::from([(CompactString::new("USDT"), 100342.0)]);
         let mut order = new_order(instrument, invest_assets, 1.0, OrderSide::Buy);
         order.desire_price = Some(26000.00);
         let bidask = BidAsk {
             ask: 25900.00,
             bid: 25900.00,
             datetime: DateTimeAsMicroseconds::now(),
-            instrument: "ATOMUSDT".to_string(),
+            instrument: CompactString::new("ATOMUSDT"),
         };
         let position = order.open(&bidask, &prices);
         let Position::Pending(mut pending_position) = position else {
@@ -1013,16 +1014,16 @@ mod tests {
 
     #[tokio::test]
     async fn limit_buy_reached() {
-        let instrument = "ATOMUSDT".to_string();
-        let prices = HashMap::from([("USDT".to_string(), 1.0)]);
-        let invest_assets = HashMap::from([("USDT".to_string(), 100342.0)]);
+        let instrument = CompactString::new("ATOMUSDT");
+        let prices = AHashMap::from([(CompactString::new("USDT"), 1.0)]);
+        let invest_assets = AHashMap::from([(CompactString::new("USDT"), 100342.0)]);
         let mut order = new_order(instrument, invest_assets, 1.0, OrderSide::Buy);
         order.desire_price = Some(25000.00);
         let bidask = BidAsk {
             ask: 25900.00,
             bid: 25900.00,
             datetime: DateTimeAsMicroseconds::now(),
-            instrument: "ATOMUSDT".to_string(),
+            instrument: CompactString::new("ATOMUSDT"),
         };
         let position = order.open(&bidask, &prices);
         let Position::Pending(mut pending_position) = position else {
@@ -1037,16 +1038,16 @@ mod tests {
 
     #[tokio::test]
     async fn limit_buy_not_reached() {
-        let instrument = "ATOMUSDT".to_string();
-        let prices = HashMap::from([("USDT".to_string(), 1.0)]);
-        let invest_assets = HashMap::from([("USDT".to_string(), 100342.0)]);
+        let instrument = CompactString::new("ATOMUSDT");
+        let prices = AHashMap::from([(CompactString::new("USDT"), 1.0)]);
+        let invest_assets = AHashMap::from([(CompactString::new("USDT"), 100342.0)]);
         let mut order = new_order(instrument, invest_assets, 1.0, OrderSide::Buy);
         order.desire_price = Some(25000.00);
         let bidask = BidAsk {
             ask: 25900.00,
             bid: 25900.00,
             datetime: DateTimeAsMicroseconds::now(),
-            instrument: "ATOMUSDT".to_string(),
+            instrument: CompactString::new("ATOMUSDT"),
         };
         let position = order.open(&bidask, &prices);
         let Position::Pending(mut pending_position) = position else {
@@ -1061,16 +1062,16 @@ mod tests {
 
     #[tokio::test]
     async fn limit_sell_not_reached() {
-        let instrument = "ATOMUSDT".to_string();
-        let prices = HashMap::from([("USDT".to_string(), 1.0)]);
-        let invest_assets = HashMap::from([("USDT".to_string(), 100342.0)]);
+        let instrument = CompactString::new("ATOMUSDT");
+        let prices = AHashMap::from([(CompactString::new("USDT"), 1.0)]);
+        let invest_assets = AHashMap::from([(CompactString::new("USDT"), 100342.0)]);
         let mut order = new_order(instrument, invest_assets, 1.0, OrderSide::Sell);
         order.desire_price = Some(26000.00);
         let bidask = BidAsk {
             ask: 25900.00,
             bid: 25900.00,
             datetime: DateTimeAsMicroseconds::now(),
-            instrument: "ATOMUSDT".to_string(),
+            instrument: CompactString::new("ATOMUSDT"),
         };
         let position = order.open(&bidask, &prices);
         let Position::Pending(pending_position) = position else {
@@ -1084,16 +1085,16 @@ mod tests {
 
     #[tokio::test]
     async fn limit_sell_reached() {
-        let instrument = "ATOMUSDT".to_string();
-        let prices = HashMap::from([("USDT".to_string(), 1.0)]);
-        let invest_assets = HashMap::from([("USDT".to_string(), 100342.0)]);
+        let instrument = CompactString::new("ATOMUSDT");
+        let prices = AHashMap::from([(CompactString::new("USDT"), 1.0)]);
+        let invest_assets = AHashMap::from([(CompactString::new("USDT"), 100342.0)]);
         let mut order = new_order(instrument, invest_assets, 1.0, OrderSide::Sell);
         order.desire_price = Some(26000.00);
         let bidask = BidAsk {
             ask: 25900.00,
             bid: 25900.00,
             datetime: DateTimeAsMicroseconds::now(),
-            instrument: "ATOMUSDT".to_string(),
+            instrument: CompactString::new("ATOMUSDT"),
         };
         let position = order.open(&bidask, &prices);
         let Position::Pending(mut pending_position) = position else {
@@ -1108,16 +1109,16 @@ mod tests {
 
     #[tokio::test]
     async fn stop_sell_reached() {
-        let instrument = "ATOMUSDT".to_string();
-        let prices = HashMap::from([("USDT".to_string(), 1.0)]);
-        let invest_assets = HashMap::from([("USDT".to_string(), 100342.0)]);
+        let instrument = CompactString::new("ATOMUSDT");
+        let prices = AHashMap::from([(CompactString::new("USDT"), 1.0)]);
+        let invest_assets = AHashMap::from([(CompactString::new("USDT"), 100342.0)]);
         let mut order = new_order(instrument, invest_assets, 1.0, OrderSide::Sell);
         order.desire_price = Some(25000.00);
         let bidask = BidAsk {
             ask: 25900.00,
             bid: 25900.00,
             datetime: DateTimeAsMicroseconds::now(),
-            instrument: "ATOMUSDT".to_string(),
+            instrument: CompactString::new("ATOMUSDT"),
         };
         let position = order.open(&bidask, &prices);
         let Position::Pending(mut pending_position) = position else {
@@ -1132,16 +1133,16 @@ mod tests {
 
     #[tokio::test]
     async fn stop_sell_not_reached() {
-        let instrument = "ATOMUSDT".to_string();
-        let prices = HashMap::from([("USDT".to_string(), 1.0)]);
-        let invest_assets = HashMap::from([("USDT".to_string(), 100342.0)]);
+        let instrument = CompactString::new("ATOMUSDT");
+        let prices = AHashMap::from([(CompactString::new("USDT"), 1.0)]);
+        let invest_assets = AHashMap::from([(CompactString::new("USDT"), 100342.0)]);
         let mut order = new_order(instrument, invest_assets, 1.0, OrderSide::Sell);
         order.desire_price = Some(25000.00);
         let bidask = BidAsk {
             ask: 25900.00,
             bid: 25900.00,
             datetime: DateTimeAsMicroseconds::now(),
-            instrument: "ATOMUSDT".to_string(),
+            instrument: CompactString::new("ATOMUSDT"),
         };
         let position = order.open(&bidask, &prices);
         let Position::Pending(mut pending_position) = position else {
@@ -1155,13 +1156,13 @@ mod tests {
     }
 
     fn new_order(
-        instrument: String,
-        invest_assets: HashMap<String, f64>,
+        instrument: CompactString,
+        invest_assets: AHashMap<CompactString, f64>,
         leverage: f64,
         side: OrderSide,
     ) -> Order {
         Order {
-            base_asset: "USDT".to_string(),
+            base_asset: CompactString::new("USDT"),
             id: "test".to_string(),
             instrument,
             trader_id: "test".to_string(),
@@ -1184,7 +1185,7 @@ mod tests {
     fn new_active_position(
         order: Order,
         bidask: &BidAsk,
-        asset_prices: &HashMap<String, f64>,
+        asset_prices: &AHashMap<CompactString, f64>,
     ) -> ActivePosition {
         let now = DateTimeAsMicroseconds::now();
 

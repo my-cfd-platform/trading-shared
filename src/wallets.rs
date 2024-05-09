@@ -2,7 +2,7 @@ use crate::calculations::calculate_percent;
 use crate::orders::OrderSide;
 use crate::positions::BidAsk;
 use ahash::AHashMap;
-use std::collections::HashMap;
+use compact_str::CompactString;
 
 #[derive(Clone, Debug)]
 pub struct Wallet {
@@ -12,11 +12,11 @@ pub struct Wallet {
     pub margin_call_percent: f64,
     pub current_loss_percent: f64,
     prev_loss_percent: f64,
-    estimate_asset: String,
-    balances_by_instruments: AHashMap<String, WalletBalance>,
-    prices_by_assets: AHashMap<String, f64>,
-    top_up_pnls_by_instruments: AHashMap<String, f64>,
-    top_up_reserved_balance_by_instruments: AHashMap<String, f64>,
+    estimate_asset: CompactString,
+    balances_by_instruments: AHashMap<CompactString, WalletBalance>,
+    prices_by_assets: AHashMap<CompactString, f64>,
+    top_up_pnls_by_instruments: AHashMap<CompactString, f64>,
+    top_up_reserved_balance_by_instruments: AHashMap<CompactString, f64>,
     pub total_top_up_reserved_balance: f64,
 }
 
@@ -24,7 +24,7 @@ impl Wallet {
     pub fn new(
         id: impl Into<String>,
         trader_id: impl Into<String>,
-        estimate_asset: impl Into<String>,
+        estimate_asset: impl Into<CompactString>,
         margin_call_percent: f64,
     ) -> Self {
         Self {
@@ -46,7 +46,7 @@ impl Wallet {
     pub fn set_top_up_reserved(
         &mut self,
         instrument: &str,
-        instrument_reserved: &HashMap<String, f64>,
+        instrument_reserved: &AHashMap<CompactString, f64>,
     ) {
         let mut new_reserved = 0.0;
 
@@ -67,19 +67,19 @@ impl Wallet {
             *old_reserved = new_reserved;
         } else {
             self.top_up_reserved_balance_by_instruments
-                .insert(instrument.to_string(), new_reserved);
+                .insert(instrument.into(), new_reserved);
         }
 
         self.total_top_up_reserved_balance += new_reserved;
     }
 
-    pub fn get_instruments(&self) -> Vec<&String> {
+    pub fn get_instruments(&self) -> Vec<&CompactString> {
         self.balances_by_instruments.keys().collect()
     }
 
     pub fn set_top_up_pnl(&mut self, instrument: &str, instrument_pnl: f64) {
         self.top_up_pnls_by_instruments
-            .insert(instrument.to_string(), instrument_pnl);
+            .insert(instrument.into(), instrument_pnl);
     }
 
     pub fn deduct_top_up_pnl(&mut self, instrument: &str, instrument_pnl: f64) {
@@ -97,7 +97,7 @@ impl Wallet {
             *pnl += instrument_pnl;
         } else {
             self.top_up_pnls_by_instruments
-                .insert(instrument.to_string(), instrument_pnl);
+                .insert(instrument.into(), instrument_pnl);
         }
     }
 
@@ -223,7 +223,7 @@ impl Wallet {
 #[derive(Clone, Debug)]
 pub struct WalletBalance {
     pub id: String,
-    pub asset_symbol: String,
+    pub asset_symbol: CompactString,
     pub asset_amount: f64,
     pub is_locked: bool,
 }

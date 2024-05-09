@@ -4,7 +4,9 @@ use crate::{
 };
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use rust_extensions::date_time::DateTimeAsMicroseconds;
-use std::{collections::HashMap, time::Duration};
+use std::{time::Duration};
+use ahash::AHashMap;
+use compact_str::CompactString;
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
@@ -12,9 +14,9 @@ pub struct Order {
     pub id: String,
     pub trader_id: String,
     pub wallet_id: String,
-    pub instrument: String,
-    pub base_asset: String,
-    pub invest_assets: HashMap<String, f64>,
+    pub instrument: CompactString,
+    pub base_asset: CompactString,
+    pub invest_assets: AHashMap<CompactString, f64>,
     pub leverage: f64,
     pub created_date: DateTimeAsMicroseconds,
     pub side: OrderSide,
@@ -87,7 +89,7 @@ pub enum AutoClosePositionUnit {
 
 impl Order {
     /// returns vec of instruments invested by order
-    pub fn get_invest_instruments(&self) -> Vec<String> {
+    pub fn get_invest_instruments(&self) -> Vec<CompactString> {
         let mut instruments = Vec::with_capacity(self.invest_assets.len());
 
         for asset in self.invest_assets.keys() {
@@ -99,7 +101,7 @@ impl Order {
     }
 
     /// returns vec of all possible instruments
-    pub fn get_instruments(&self) -> Vec<String> {
+    pub fn get_instruments(&self) -> Vec<CompactString> {
         let mut instruments = Vec::with_capacity(self.invest_assets.len() + 1);
         instruments.push(self.instrument.clone());
 
@@ -123,7 +125,7 @@ impl Order {
         Uuid::new_v4().to_string()
     }
 
-    pub fn validate_prices(&self, asset_prices: &HashMap<String, f64>) -> Result<(), String> {
+    pub fn validate_prices(&self, asset_prices: &AHashMap<CompactString, f64>) -> Result<(), String> {
         for (asset, _amount) in self.invest_assets.iter() {
             let price = asset_prices.get(asset);
 
@@ -136,7 +138,7 @@ impl Order {
         Ok(())
     }
 
-    pub fn open(self, bidask: &BidAsk, asset_prices: &HashMap<String, f64>) -> Position {
+    pub fn open(self, bidask: &BidAsk, asset_prices: &AHashMap<CompactString, f64>) -> Position {
         self.open_with_id(Position::generate_id(), bidask, asset_prices)
     }
 
@@ -144,7 +146,7 @@ impl Order {
         self,
         id: String,
         bidask: &BidAsk,
-        asset_prices: &HashMap<String, f64>,
+        asset_prices: &AHashMap<CompactString, f64>,
     ) -> Position {
         if self.validate_prices(asset_prices).is_err() {
             panic!("Can't open order: invalid prices");
@@ -170,7 +172,7 @@ impl Order {
         invest_amount * self.leverage
     }
 
-    pub fn calculate_invest_amount(&self, asset_prices: &HashMap<String, f64>) -> f64 {
+    pub fn calculate_invest_amount(&self, asset_prices: &AHashMap<CompactString, f64>) -> f64 {
         calculate_total_amount(&self.invest_assets, asset_prices)
     }
 
@@ -178,7 +180,7 @@ impl Order {
         self,
         id: String,
         bidask: &BidAsk,
-        asset_prices: &HashMap<String, f64>,
+        asset_prices: &AHashMap<CompactString, f64>,
     ) -> ActivePosition {
         let now = DateTimeAsMicroseconds::now();
         let mut asset_prices = asset_prices.to_owned();
@@ -210,7 +212,7 @@ impl Order {
         self,
         id: String,
         bidask: &BidAsk,
-        asset_prices: &HashMap<String, f64>,
+        asset_prices: &AHashMap<CompactString, f64>,
     ) -> PendingPosition {
         let now = DateTimeAsMicroseconds::now();
         let mut asset_prices = asset_prices.to_owned();
@@ -225,7 +227,7 @@ impl Order {
             current_price: bidask.get_open_price(&self.side),
             last_update_date: now,
             order: self,
-            total_invest_assets: HashMap::new(),
+            total_invest_assets: AHashMap::new(),
         }
     }
 }

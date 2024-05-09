@@ -1,5 +1,7 @@
 use crate::{orders::OrderSide, positions::BidAsk};
 use std::collections::HashMap;
+use ahash::AHashMap;
+use compact_str::CompactString;
 
 pub fn get_close_price(
     bidasks: &HashMap<String, BidAsk>,
@@ -36,8 +38,8 @@ pub fn calculate_percent(from_number: f64, number: f64) -> f64 {
 }
 
 pub fn calculate_total_amount(
-    asset_amounts: &HashMap<String, f64>,
-    asset_prices: &HashMap<String, f64>,
+    asset_amounts: &AHashMap<CompactString, f64>,
+    asset_prices: &AHashMap<CompactString, f64>,
 ) -> f64 {
     let mut total_amount = 0.0;
 
