@@ -16,9 +16,12 @@ pub use ahash::AHashMap;
 
 #[cfg(test)]
 mod tests {
+    use crate::positions::BidAsk;
+
     #[test]
-    fn it_works() {
-        let result = 2 + 2;
-        assert_eq!(result, 4);
+    fn test_get_instrument_symbol() {
+        let instrument_symbol = BidAsk::get_instrument_symbol(&"BTC".into(), &"USD".into());
+
+        assert_eq!(instrument_symbol, "BTCUSD".into());
     }
 }

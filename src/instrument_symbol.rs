@@ -26,6 +26,18 @@ impl From<String> for InstrumentSymbol {
     }
 }
 
+impl From<CompactString> for InstrumentSymbol {
+    fn from(value: CompactString) -> Self {
+        InstrumentSymbol(value)
+    }
+}
+
+impl From<&CompactString> for InstrumentSymbol {
+    fn from(value: &CompactString) -> Self {
+        InstrumentSymbol(value.to_owned())
+    }
+}
+
 impl From<&String> for InstrumentSymbol {
     fn from(value: &String) -> Self {
         InstrumentSymbol(value.into())

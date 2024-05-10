@@ -4,6 +4,7 @@ use crate::{assets, calculations::calculate_total_amount, orders::{Order, OrderS
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 use std::time::Duration;
+use compact_str::CompactString;
 use rust_extensions::sorted_vec::SortedVec;
 use uuid::Uuid;
 use crate::asset_symbol::AssetSymbol;
@@ -41,9 +42,11 @@ impl BidAsk {
     }
 
     pub fn get_instrument_symbol(base_asset: &AssetSymbol, quote_asset: &AssetSymbol) -> InstrumentSymbol {
-        let id = format!("{}{}", base_asset, quote_asset);
+        let mut compact_str = CompactString::with_capacity(base_asset.len() + quote_asset.len());
+        compact_str.push_str(base_asset);
+        compact_str.push_str(quote_asset);
 
-        id.into()
+        compact_str.into()
     }
 
     pub fn get_close_price(&self, side: &OrderSide) -> f64 {
