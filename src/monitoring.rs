@@ -99,14 +99,14 @@ impl PositionsMonitor {
         pnl_accuracy: Option<u32>,
     ) -> Self {
         let instruments_count = 500;
-        let wallet_ids_count = capacity / 4;
+        let wallet_ids_count = capacity / 5;
         
         Self {
             wallets_by_ids: AHashMap::with_capacity(wallet_ids_count),
             positions_cache: PositionsCache::with_capacity(capacity),
             ids_by_instruments: SortedVec::new_with_capacity(instruments_count),
             cancel_top_up_delay,
-            locked_ids: SortedVec::new_with_capacity(capacity / 5),
+            locked_ids: SortedVec::new_with_capacity(capacity / 20),
             cancel_top_up_price_change_percent,
             pnl_accuracy,
             wallet_ids_by_instruments: SortedVec::new_with_capacity(instruments_count),
@@ -286,8 +286,8 @@ impl PositionsMonitor {
             return Vec::with_capacity(0);
         };
 
-        let mut events = Vec::with_capacity(position_ids.len() / 8);
-        let mut wallet_ids_to_remove = Vec::with_capacity(self.wallets_by_ids.len() / 5);
+        let mut events = Vec::with_capacity(position_ids.len() / 20);
+        let mut wallet_ids_to_remove = Vec::with_capacity(self.wallets_by_ids.len() / 10);
 
         position_ids.items.retain(|position_id| {
             if self.locked_ids.contains(position_id) {
