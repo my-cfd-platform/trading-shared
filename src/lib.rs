@@ -10,7 +10,7 @@ pub mod position_id;
 pub mod asset_symbol;
 pub mod wallet_id;
 pub mod assets;
-
+pub mod sharding;
 
 pub use ahash::AHashMap;
 
