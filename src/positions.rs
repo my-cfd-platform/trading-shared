@@ -22,7 +22,7 @@ pub enum ClosePositionReason {
     InsufficientBalance = 5,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct BidAsk {
     pub instrument: InstrumentSymbol,
     pub datetime: DateTimeAsMicroseconds,
