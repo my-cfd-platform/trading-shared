@@ -90,13 +90,13 @@ impl BidAsksCache {
 
 pub struct PositionsCache {
     positions_by_ids: AHashMap<PositionId, Position>,
-    ids_by_wallets: AHashMap<WalletId, AHashSet<PositionId>>,
+    ids_by_wallet_ids: AHashMap<WalletId, AHashSet<PositionId>>,
 }
 
 impl PositionsCache {
     pub fn with_capacity(capacity: usize) -> PositionsCache {
         PositionsCache {
-            ids_by_wallets: AHashMap::with_capacity(capacity),
+            ids_by_wallet_ids: AHashMap::with_capacity(capacity),
             positions_by_ids: AHashMap::with_capacity(capacity),
         }
     }
@@ -115,16 +115,16 @@ impl PositionsCache {
 
         self.positions_by_ids.insert(id.clone(), position);
 
-        if let Some(ids) = self.ids_by_wallets.get_mut(&wallet_id) {
+        if let Some(ids) = self.ids_by_wallet_ids.get_mut(&wallet_id) {
             ids.insert(id);
         } else {
-            self.ids_by_wallets
+            self.ids_by_wallet_ids
                 .insert(wallet_id, AHashSet::from([id]));
         }
     }
 
     pub fn get_by_wallet_id(&self, wallet_id: &WalletId) -> Vec<&Position> {
-        let ids = self.ids_by_wallets.get(wallet_id);
+        let ids = self.ids_by_wallet_ids.get(wallet_id);
 
         if let Some(ids) = ids {
             let mut positions = Vec::with_capacity(ids.len());
@@ -140,7 +140,7 @@ impl PositionsCache {
     }
 
     pub fn contains_by_wallet_id(&self, wallet_id: &WalletId) -> bool {
-        self.ids_by_wallets.contains_key(wallet_id)
+        self.ids_by_wallet_ids.contains_key(wallet_id)
     }
 
     pub fn get_mut(&mut self, id: &PositionId) -> Option<&mut Position> {
@@ -151,7 +151,7 @@ impl PositionsCache {
         let position = self.positions_by_ids.remove(position_id);
 
         if let Some(position) = position.as_ref() {
-            if let Some(ids) = self.ids_by_wallets.get_mut(&position.get_order().wallet_id) {
+            if let Some(ids) = self.ids_by_wallet_ids.get_mut(&position.get_order().wallet_id) {
                 ids.remove(position_id);
             }
         }
