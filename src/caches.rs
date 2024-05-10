@@ -14,6 +14,7 @@ impl EntityWithKey<InstrumentSymbol> for BidAsk {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct BidAsksCache {
     items: SortedVec<InstrumentSymbol, BidAsk>,
 }
