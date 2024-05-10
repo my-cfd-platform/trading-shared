@@ -1,8 +1,15 @@
 use std::fmt::Display;
+use rust_extensions::sorted_vec::EntityWithKey;
 use uuid::Uuid;
 
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub struct PositionId(pub Uuid);
+
+impl EntityWithKey<PositionId> for PositionId {
+    fn get_key(&self) -> &PositionId {
+        self
+    }
+}
 
 impl From<&str> for PositionId {
     fn from(value: &str) -> Self {

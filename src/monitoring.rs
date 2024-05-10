@@ -82,7 +82,7 @@ pub struct PositionsMonitor {
     ids_by_instruments: SortedVec<InstrumentSymbol, PositionIdsByInstrumentSymbols>,
     cancel_top_up_delay: Duration,
     cancel_top_up_price_change_percent: f64,
-    locked_ids: AHashSet<PositionId>,
+    locked_ids: SortedVec<PositionId, PositionId>,
     pnl_accuracy: Option<u32>,
     wallets_by_ids: AHashMap<WalletId, Wallet>,
     wallet_ids_by_instruments: SortedVec<InstrumentSymbol, WalletIdsByInstrumentSymbols>,
@@ -95,15 +95,17 @@ impl PositionsMonitor {
         cancel_top_up_price_change_percent: f64,
         pnl_accuracy: Option<u32>,
     ) -> Self {
+        let instruments_count = 500;
+        
         Self {
             wallets_by_ids: Default::default(),
             positions_cache: PositionsCache::with_capacity(capacity),
-            ids_by_instruments: SortedVec::new_with_capacity(500),
+            ids_by_instruments: SortedVec::new_with_capacity(instruments_count),
             cancel_top_up_delay,
-            locked_ids: AHashSet::with_capacity(capacity),
+            locked_ids: SortedVec::new_with_capacity(capacity / 5),
             cancel_top_up_price_change_percent,
             pnl_accuracy,
-            wallet_ids_by_instruments: SortedVec::new_with_capacity(500),
+            wallet_ids_by_instruments: SortedVec::new_with_capacity(instruments_count),
         }
     }
     
@@ -318,7 +320,7 @@ impl PositionsMonitor {
                                 .push(PositionMonitoringEvent::PositionActivated(position.clone()));
                             self.positions_cache.add(Position::Active(position));
                         } else {
-                            self.locked_ids.insert(position.id.clone());
+                            self.locked_ids.insert_or_replace(position.id.clone());
                             let lock_reason =
                                 PositionLockReason::ActivationPending(position.clone());
                             events.push(PositionMonitoringEvent::PositionLocked(lock_reason));
@@ -337,7 +339,7 @@ impl PositionsMonitor {
                     }
 
                     if position.is_top_up() {
-                        self.locked_ids.insert(position.id.clone());
+                        self.locked_ids.insert_or_replace(position.id.clone());
                         let event = PositionMonitoringEvent::PositionLocked(
                             PositionLockReason::TopUp(position.to_owned()),
                         );
@@ -349,7 +351,7 @@ impl PositionsMonitor {
                         );
 
                         if !canceled_top_ups.is_empty() {
-                            self.locked_ids.insert(position.id.clone());
+                            self.locked_ids.insert_or_replace(position.id.clone());
                             let reason = PositionLockReason::TopUpsCanceled((
                                 position.to_owned(),
                                 canceled_top_ups,
