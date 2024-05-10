@@ -285,8 +285,6 @@ impl PositionsMonitor {
     }
 
     pub fn update(&mut self, bidask: &BidAsk) -> Vec<PositionMonitoringEvent> {
-        self.reset_reused_allocation();
-
         let position_ids = self.ids_by_instruments.get_mut(&bidask.instrument);
 
         let Some(position_ids) = position_ids else {
@@ -294,7 +292,8 @@ impl PositionsMonitor {
         };
 
         let mut events = Vec::with_capacity(position_ids.len() / 20);
-        let mut wallet_ids_to_remove = Vec::with_capacity(self.wallets_by_ids.len() / 10);
+        let wallet_ids_to_remove_count = if self.wallet_monitoring_enabled {self.wallets_by_ids.len() / 10} else {0};
+        let mut wallet_ids_to_remove = Vec::with_capacity(wallet_ids_to_remove_count);
 
         position_ids.items.retain(|position_id| {
             if self.locked_ids.contains(position_id) {
@@ -388,7 +387,7 @@ impl PositionsMonitor {
                         };
                         let position = position.close(reason, self.pnl_accuracy);
 
-                        if self
+                        if self.wallet_monitoring_enabled && self
                             .positions_cache
                             .contains_by_wallet_id(&position.order.wallet_id)
                         {
@@ -454,6 +453,8 @@ impl PositionsMonitor {
                 events.push(event);
             }
         }
+        
+        self.reset_reused_allocation();
 
         events
     }
