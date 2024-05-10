@@ -1,18 +1,18 @@
+use crate::asset_symbol::AssetSymbol;
+use crate::assets::AssetAmount;
+use crate::instrument_symbol::InstrumentSymbol;
+use crate::position_id::PositionId;
 use crate::positions::PendingPosition;
 use crate::top_ups::{ActiveTopUp, CanceledTopUp};
+use crate::wallet_id::WalletId;
 use crate::wallets::{Wallet, WalletBalance};
 use crate::{
     caches::PositionsCache,
     positions::{ActivePosition, BidAsk, ClosedPosition, Position},
 };
 use ahash::{AHashMap, AHashSet};
-use std::time::Duration;
 use rust_extensions::sorted_vec::{EntityWithKey, SortedVec};
-use crate::asset_symbol::AssetSymbol;
-use crate::assets::AssetAmount;
-use crate::instrument_symbol::InstrumentSymbol;
-use crate::position_id::PositionId;
-use crate::wallet_id::WalletId;
+use std::time::Duration;
 
 pub struct PositionIdsByInstrumentSymbol {
     pub items: AHashSet<PositionId>,
@@ -33,7 +33,7 @@ impl PositionIdsByInstrumentSymbol {
             instrument_symbol,
         }
     }
-    
+
     pub fn len(&self) -> usize {
         self.items.len()
     }
@@ -76,7 +76,6 @@ impl EntityWithKey<InstrumentSymbol> for WalletIdsByInstrumentSymbol {
     }
 }
 
-
 pub struct PositionsMonitor {
     positions_cache: PositionsCache,
     ids_by_instruments: SortedVec<InstrumentSymbol, PositionIdsByInstrumentSymbol>,
@@ -86,9 +85,10 @@ pub struct PositionsMonitor {
     pnl_accuracy: Option<u32>,
     wallets_by_ids: AHashMap<WalletId, Wallet>,
     wallet_ids_by_instruments: SortedVec<InstrumentSymbol, WalletIdsByInstrumentSymbol>,
+    wallet_monitoring_enabled: bool,
     // reused allocations
     top_up_pnls_by_wallet_ids: AHashMap<WalletId, f64>,
-    top_up_reserved_by_wallet_ids: AHashMap<WalletId, SortedVec<AssetSymbol, AssetAmount>>
+    top_up_reserved_by_wallet_ids: AHashMap<WalletId, SortedVec<AssetSymbol, AssetAmount>>,
 }
 
 impl PositionsMonitor {
@@ -97,10 +97,11 @@ impl PositionsMonitor {
         cancel_top_up_delay: Duration,
         cancel_top_up_price_change_percent: f64,
         pnl_accuracy: Option<u32>,
+        wallet_monitoring_enabled: bool,
     ) -> Self {
         let instruments_count = 500;
         let wallet_ids_count = capacity / 5;
-        
+
         Self {
             wallets_by_ids: AHashMap::with_capacity(wallet_ids_count),
             positions_cache: PositionsCache::with_capacity(capacity),
@@ -112,9 +113,10 @@ impl PositionsMonitor {
             wallet_ids_by_instruments: SortedVec::new_with_capacity(instruments_count),
             top_up_pnls_by_wallet_ids: AHashMap::with_capacity(wallet_ids_count),
             top_up_reserved_by_wallet_ids: AHashMap::with_capacity(wallet_ids_count),
+            wallet_monitoring_enabled,
         }
     }
-    
+
     pub fn count(&self) -> usize {
         self.positions_cache.count()
     }
@@ -199,8 +201,12 @@ impl PositionsMonitor {
             if let Some(wallet_ids) = wallet_ids {
                 wallet_ids.items.insert(wallet.id.clone());
             } else {
-                self.wallet_ids_by_instruments
-                    .insert_or_replace(WalletIdsByInstrumentSymbol::new_with_one(instrument.clone(), wallet.id.clone()));
+                self.wallet_ids_by_instruments.insert_or_replace(
+                    WalletIdsByInstrumentSymbol::new_with_one(
+                        instrument.clone(),
+                        wallet.id.clone(),
+                    ),
+                );
             }
         }
 
@@ -231,8 +237,9 @@ impl PositionsMonitor {
             if let Some(ids) = self.ids_by_instruments.get_mut(&invest_instrument) {
                 ids.items.insert(id.clone());
             } else {
-                self.ids_by_instruments
-                    .insert_or_replace(PositionIdsByInstrumentSymbol::new_with_one(invest_instrument, id.clone()));
+                self.ids_by_instruments.insert_or_replace(
+                    PositionIdsByInstrumentSymbol::new_with_one(invest_instrument, id.clone()),
+                );
             }
         }
 
@@ -393,8 +400,9 @@ impl PositionsMonitor {
                         false // remove closed position
                     } else {
                         if position.order.top_up_enabled {
-                            let wallet_pnl =
-                                self.top_up_pnls_by_wallet_ids.get_mut(&position.order.wallet_id);
+                            let wallet_pnl = self
+                                .top_up_pnls_by_wallet_ids
+                                .get_mut(&position.order.wallet_id);
 
                             if let Some(wallet_pnl) = wallet_pnl {
                                 *wallet_pnl += position.current_pnl;
@@ -404,20 +412,21 @@ impl PositionsMonitor {
                             }
 
                             // calc reserved amounts
-                            let reserved_by_assets =
-                                self.top_up_reserved_by_wallet_ids.get_mut(&position.order.wallet_id);
+                            let reserved_by_assets = self
+                                .top_up_reserved_by_wallet_ids
+                                .get_mut(&position.order.wallet_id);
 
                             if let Some(reserved_by_assets) = reserved_by_assets {
-                                for item in
-                                    position.total_invest_assets.iter()
-                                {
+                                for item in position.total_invest_assets.iter() {
                                     let reserved_amount = reserved_by_assets.get_mut(&item.symbol);
 
                                     if let Some(reserved_amount) = reserved_amount {
                                         reserved_amount.amount += item.amount;
                                     } else {
-                                        reserved_by_assets
-                                            .insert_or_replace(AssetAmount{amount:item.amount, symbol:item.symbol.clone()});
+                                        reserved_by_assets.insert_or_replace(AssetAmount {
+                                            amount: item.amount,
+                                            symbol: item.symbol.clone(),
+                                        });
                                     }
                                 }
                             } else {
@@ -434,16 +443,16 @@ impl PositionsMonitor {
             }
         });
 
-        for wallet_id in wallet_ids_to_remove {
-            self.remove_wallet(&wallet_id);
-        }
+        if self.wallet_monitoring_enabled {
+            for wallet_id in wallet_ids_to_remove {
+                self.remove_wallet(&wallet_id);
+            }
 
-        self.update_wallet_prices(bidask);
-        self.update_wallet_reserved(bidask);
-        let wallet_events = self.update_wallet_pnls(bidask);
-
-        for event in wallet_events.into_iter() {
-            events.push(event);
+            self.update_wallet_prices(bidask);
+            self.update_wallet_reserved(bidask);
+            for event in self.update_wallet_pnls(bidask) {
+                events.push(event);
+            }
         }
 
         events
@@ -463,10 +472,7 @@ impl PositionsMonitor {
         }
     }
 
-    fn update_wallet_reserved(
-        &mut self,
-        bidask: &BidAsk,
-    ) {
+    fn update_wallet_reserved(&mut self, bidask: &BidAsk) {
         for (wallet_id, reserved_by_assets) in &self.top_up_reserved_by_wallet_ids {
             let wallet = self.wallets_by_ids.get_mut(wallet_id);
 
@@ -478,10 +484,7 @@ impl PositionsMonitor {
         }
     }
 
-    fn update_wallet_pnls(
-        &mut self,
-        bidask: &BidAsk,
-    ) -> Vec<PositionMonitoringEvent> {
+    fn update_wallet_pnls(&mut self, bidask: &BidAsk) -> Vec<PositionMonitoringEvent> {
         let mut events = Vec::new();
 
         for (wallet_id, pnl) in self.top_up_pnls_by_wallet_ids.iter() {
