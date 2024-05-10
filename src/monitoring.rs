@@ -86,6 +86,8 @@ pub struct PositionsMonitor {
     pnl_accuracy: Option<u32>,
     wallets_by_ids: AHashMap<WalletId, Wallet>,
     wallet_ids_by_instruments: SortedVec<InstrumentSymbol, WalletIdsByInstrumentSymbol>,
+    // reused allocations
+    top_up_pnls_by_wallet_ids: AHashMap<WalletId, f64>,
 }
 
 impl PositionsMonitor {
@@ -96,9 +98,10 @@ impl PositionsMonitor {
         pnl_accuracy: Option<u32>,
     ) -> Self {
         let instruments_count = 500;
+        let wallet_ids_count = capacity / 4;
         
         Self {
-            wallets_by_ids: Default::default(),
+            wallets_by_ids: AHashMap::with_capacity(wallet_ids_count),
             positions_cache: PositionsCache::with_capacity(capacity),
             ids_by_instruments: SortedVec::new_with_capacity(instruments_count),
             cancel_top_up_delay,
@@ -106,6 +109,7 @@ impl PositionsMonitor {
             cancel_top_up_price_change_percent,
             pnl_accuracy,
             wallet_ids_by_instruments: SortedVec::new_with_capacity(instruments_count),
+            top_up_pnls_by_wallet_ids: AHashMap::with_capacity(wallet_ids_count),
         }
     }
     
@@ -265,18 +269,22 @@ impl PositionsMonitor {
     pub fn get_mut(&mut self, id: &PositionId) -> Option<&mut Position> {
         self.positions_cache.get_mut(id)
     }
+    
+    fn reset_reused_allocation(&mut self) {
+        self.top_up_pnls_by_wallet_ids.clear();
+    }
 
     pub fn update(&mut self, bidask: &BidAsk) -> Vec<PositionMonitoringEvent> {
+        self.reset_reused_allocation();
+        
         let position_ids = self.ids_by_instruments.get_mut(&bidask.instrument);
 
         let Some(position_ids) = position_ids else {
             return Vec::with_capacity(0);
         };
-
-        let mut events = Vec::with_capacity(position_ids.len());
-        let mut top_up_pnls_by_wallet_ids: AHashMap<WalletId, f64> =
-            AHashMap::with_capacity(position_ids.len() / 2);
-        let mut wallet_ids_to_remove = Vec::with_capacity(position_ids.len() / 3);
+        
+        let mut events = Vec::with_capacity(position_ids.len() / 8);
+        let mut wallet_ids_to_remove = Vec::with_capacity(self.wallets_by_ids.len() / 5);
         let mut top_up_reserved_by_wallet_ids: AHashMap<WalletId, SortedVec<AssetSymbol, AssetAmount>> =
             AHashMap::with_capacity(position_ids.len() / 2);
 
@@ -385,12 +393,12 @@ impl PositionsMonitor {
                     } else {
                         if position.order.top_up_enabled {
                             let wallet_pnl =
-                                top_up_pnls_by_wallet_ids.get_mut(&position.order.wallet_id);
+                                self.top_up_pnls_by_wallet_ids.get_mut(&position.order.wallet_id);
 
                             if let Some(wallet_pnl) = wallet_pnl {
                                 *wallet_pnl += position.current_pnl;
                             } else {
-                                top_up_pnls_by_wallet_ids
+                                self.top_up_pnls_by_wallet_ids
                                     .insert(position.order.wallet_id.clone(), position.current_pnl);
                             }
 
@@ -431,7 +439,7 @@ impl PositionsMonitor {
 
         self.update_wallet_prices(bidask);
         self.update_wallet_reserved(bidask, &top_up_reserved_by_wallet_ids);
-        let wallet_events = self.update_wallet_pnls(bidask, top_up_pnls_by_wallet_ids);
+        let wallet_events = self.update_wallet_pnls(bidask);
 
         for event in wallet_events.into_iter() {
             events.push(event);
@@ -473,25 +481,24 @@ impl PositionsMonitor {
     fn update_wallet_pnls(
         &mut self,
         bidask: &BidAsk,
-        pnls_by_wallet_ids: AHashMap<WalletId, f64>,
     ) -> Vec<PositionMonitoringEvent> {
         let mut events = Vec::new();
 
-        for (wallet_id, pnl) in pnls_by_wallet_ids {
+        for (wallet_id, pnl) in self.top_up_pnls_by_wallet_ids.iter() {
             let wallet = self.wallets_by_ids.get_mut(&wallet_id);
 
             let Some(wallet) = wallet else {
                 continue;
             };
 
-            wallet.set_top_up_pnl(&bidask.instrument, pnl);
+            wallet.set_top_up_pnl(&bidask.instrument, *pnl);
             wallet.update_loss();
 
             if wallet.is_margin_call() {
                 events.push(PositionMonitoringEvent::WalletMarginCall(
                     WalletMarginCallInfo {
                         loss_percent: wallet.current_loss_percent,
-                        pnl,
+                        pnl: *pnl,
                         wallet_id: wallet.id.clone(),
                         trader_id: wallet.trader_id.clone(),
                     },
