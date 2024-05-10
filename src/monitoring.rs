@@ -88,6 +88,7 @@ pub struct PositionsMonitor {
     wallet_ids_by_instruments: SortedVec<InstrumentSymbol, WalletIdsByInstrumentSymbol>,
     // reused allocations
     top_up_pnls_by_wallet_ids: AHashMap<WalletId, f64>,
+    top_up_reserved_by_wallet_ids: AHashMap<WalletId, SortedVec<AssetSymbol, AssetAmount>>
 }
 
 impl PositionsMonitor {
@@ -110,6 +111,7 @@ impl PositionsMonitor {
             pnl_accuracy,
             wallet_ids_by_instruments: SortedVec::new_with_capacity(instruments_count),
             top_up_pnls_by_wallet_ids: AHashMap::with_capacity(wallet_ids_count),
+            top_up_reserved_by_wallet_ids: AHashMap::with_capacity(wallet_ids_count),
         }
     }
     
@@ -269,24 +271,23 @@ impl PositionsMonitor {
     pub fn get_mut(&mut self, id: &PositionId) -> Option<&mut Position> {
         self.positions_cache.get_mut(id)
     }
-    
+
     fn reset_reused_allocation(&mut self) {
         self.top_up_pnls_by_wallet_ids.clear();
+        self.top_up_reserved_by_wallet_ids.clear();
     }
 
     pub fn update(&mut self, bidask: &BidAsk) -> Vec<PositionMonitoringEvent> {
         self.reset_reused_allocation();
-        
+
         let position_ids = self.ids_by_instruments.get_mut(&bidask.instrument);
 
         let Some(position_ids) = position_ids else {
             return Vec::with_capacity(0);
         };
-        
+
         let mut events = Vec::with_capacity(position_ids.len() / 8);
         let mut wallet_ids_to_remove = Vec::with_capacity(self.wallets_by_ids.len() / 5);
-        let mut top_up_reserved_by_wallet_ids: AHashMap<WalletId, SortedVec<AssetSymbol, AssetAmount>> =
-            AHashMap::with_capacity(position_ids.len() / 2);
 
         position_ids.items.retain(|position_id| {
             if self.locked_ids.contains(position_id) {
@@ -404,7 +405,7 @@ impl PositionsMonitor {
 
                             // calc reserved amounts
                             let reserved_by_assets =
-                                top_up_reserved_by_wallet_ids.get_mut(&position.order.wallet_id);
+                                self.top_up_reserved_by_wallet_ids.get_mut(&position.order.wallet_id);
 
                             if let Some(reserved_by_assets) = reserved_by_assets {
                                 for item in
@@ -420,7 +421,7 @@ impl PositionsMonitor {
                                     }
                                 }
                             } else {
-                                top_up_reserved_by_wallet_ids.insert(
+                                self.top_up_reserved_by_wallet_ids.insert(
                                     position.order.wallet_id.clone(),
                                     position.order.invest_assets.clone(),
                                 );
@@ -438,7 +439,7 @@ impl PositionsMonitor {
         }
 
         self.update_wallet_prices(bidask);
-        self.update_wallet_reserved(bidask, &top_up_reserved_by_wallet_ids);
+        self.update_wallet_reserved(bidask);
         let wallet_events = self.update_wallet_pnls(bidask);
 
         for event in wallet_events.into_iter() {
@@ -465,9 +466,8 @@ impl PositionsMonitor {
     fn update_wallet_reserved(
         &mut self,
         bidask: &BidAsk,
-        reserved_by_wallet_ids: &AHashMap<WalletId, SortedVec<AssetSymbol, AssetAmount>>,
     ) {
-        for (wallet_id, reserved_by_assets) in reserved_by_wallet_ids {
+        for (wallet_id, reserved_by_assets) in &self.top_up_reserved_by_wallet_ids {
             let wallet = self.wallets_by_ids.get_mut(wallet_id);
 
             let Some(wallet) = wallet else {
