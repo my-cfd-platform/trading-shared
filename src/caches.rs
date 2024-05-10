@@ -53,7 +53,7 @@ impl BidAsksCache {
         for asset in assets.iter() {
             let asset: AssetSymbol = (*asset).into();
 
-            let instrument = BidAsk::get_instrument_symbol(&base_asset, &asset);
+            let instrument = BidAsk::get_instrument_symbol(&asset, &base_asset);
             let bidask = self.items.get(&instrument);
 
             if let Some(bidask) = bidask {
