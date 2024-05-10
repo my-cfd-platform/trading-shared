@@ -14,21 +14,21 @@ use crate::instrument_symbol::InstrumentSymbol;
 use crate::position_id::PositionId;
 use crate::wallet_id::WalletId;
 
-pub struct PositionIdsByInstrumentSymbols {
+pub struct PositionIdsByInstrumentSymbol {
     pub items: AHashSet<PositionId>,
     instrument_symbol: InstrumentSymbol,
 }
 
-impl PositionIdsByInstrumentSymbols {
+impl PositionIdsByInstrumentSymbol {
     pub fn new(instrument_symbol: InstrumentSymbol) -> Self {
-        PositionIdsByInstrumentSymbols {
+        PositionIdsByInstrumentSymbol {
             items: Default::default(),
             instrument_symbol,
         }
     }
 
     pub fn new_with_one(instrument_symbol: InstrumentSymbol, id: PositionId) -> Self {
-        PositionIdsByInstrumentSymbols {
+        PositionIdsByInstrumentSymbol {
             items: AHashSet::from([id]),
             instrument_symbol,
         }
@@ -39,27 +39,27 @@ impl PositionIdsByInstrumentSymbols {
     }
 }
 
-impl EntityWithKey<InstrumentSymbol> for PositionIdsByInstrumentSymbols {
+impl EntityWithKey<InstrumentSymbol> for PositionIdsByInstrumentSymbol {
     fn get_key(&self) -> &InstrumentSymbol {
         &self.instrument_symbol
     }
 }
 
-pub struct WalletIdsByInstrumentSymbols {
+pub struct WalletIdsByInstrumentSymbol {
     pub items: AHashSet<WalletId>,
     instrument_symbol: InstrumentSymbol,
 }
 
-impl WalletIdsByInstrumentSymbols {
+impl WalletIdsByInstrumentSymbol {
     pub fn new(instrument_symbol: InstrumentSymbol) -> Self {
-        WalletIdsByInstrumentSymbols {
+        WalletIdsByInstrumentSymbol {
             items: Default::default(),
             instrument_symbol,
         }
     }
 
     pub fn new_with_one(instrument_symbol: InstrumentSymbol, id: WalletId) -> Self {
-        WalletIdsByInstrumentSymbols {
+        WalletIdsByInstrumentSymbol {
             items: AHashSet::from([id]),
             instrument_symbol,
         }
@@ -70,7 +70,7 @@ impl WalletIdsByInstrumentSymbols {
     }
 }
 
-impl EntityWithKey<InstrumentSymbol> for WalletIdsByInstrumentSymbols {
+impl EntityWithKey<InstrumentSymbol> for WalletIdsByInstrumentSymbol {
     fn get_key(&self) -> &InstrumentSymbol {
         &self.instrument_symbol
     }
@@ -79,13 +79,13 @@ impl EntityWithKey<InstrumentSymbol> for WalletIdsByInstrumentSymbols {
 
 pub struct PositionsMonitor {
     positions_cache: PositionsCache,
-    ids_by_instruments: SortedVec<InstrumentSymbol, PositionIdsByInstrumentSymbols>,
+    ids_by_instruments: SortedVec<InstrumentSymbol, PositionIdsByInstrumentSymbol>,
     cancel_top_up_delay: Duration,
     cancel_top_up_price_change_percent: f64,
     locked_ids: SortedVec<PositionId, PositionId>,
     pnl_accuracy: Option<u32>,
     wallets_by_ids: AHashMap<WalletId, Wallet>,
-    wallet_ids_by_instruments: SortedVec<InstrumentSymbol, WalletIdsByInstrumentSymbols>,
+    wallet_ids_by_instruments: SortedVec<InstrumentSymbol, WalletIdsByInstrumentSymbol>,
 }
 
 impl PositionsMonitor {
@@ -194,7 +194,7 @@ impl PositionsMonitor {
                 wallet_ids.items.insert(wallet.id.clone());
             } else {
                 self.wallet_ids_by_instruments
-                    .insert_or_replace(WalletIdsByInstrumentSymbols::new_with_one(instrument.clone(), wallet.id.clone()));
+                    .insert_or_replace(WalletIdsByInstrumentSymbol::new_with_one(instrument.clone(), wallet.id.clone()));
             }
         }
 
@@ -226,7 +226,7 @@ impl PositionsMonitor {
                 ids.items.insert(id.clone());
             } else {
                 self.ids_by_instruments
-                    .insert_or_replace(PositionIdsByInstrumentSymbols::new_with_one(invest_instrument, id.clone()));
+                    .insert_or_replace(PositionIdsByInstrumentSymbol::new_with_one(invest_instrument, id.clone()));
             }
         }
 
