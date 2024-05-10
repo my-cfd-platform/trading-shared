@@ -7,22 +7,85 @@ use crate::{
 };
 use ahash::{AHashMap, AHashSet};
 use std::time::Duration;
-use rust_extensions::sorted_vec::SortedVec;
+use rust_extensions::sorted_vec::{EntityWithKey, SortedVec};
 use crate::asset_symbol::AssetSymbol;
 use crate::assets::AssetAmount;
 use crate::instrument_symbol::InstrumentSymbol;
 use crate::position_id::PositionId;
 use crate::wallet_id::WalletId;
 
+pub struct PositionIdsByInstrumentSymbols {
+    pub items: AHashSet<PositionId>,
+    instrument_symbol: InstrumentSymbol,
+}
+
+impl PositionIdsByInstrumentSymbols {
+    pub fn new(instrument_symbol: InstrumentSymbol) -> Self {
+        PositionIdsByInstrumentSymbols {
+            items: Default::default(),
+            instrument_symbol,
+        }
+    }
+
+    pub fn new_with_one(instrument_symbol: InstrumentSymbol, id: PositionId) -> Self {
+        PositionIdsByInstrumentSymbols {
+            items: AHashSet::from([id]),
+            instrument_symbol,
+        }
+    }
+    
+    pub fn len(&self) -> usize {
+        self.items.len()
+    }
+}
+
+impl EntityWithKey<InstrumentSymbol> for PositionIdsByInstrumentSymbols {
+    fn get_key(&self) -> &InstrumentSymbol {
+        &self.instrument_symbol
+    }
+}
+
+pub struct WalletIdsByInstrumentSymbols {
+    pub items: AHashSet<WalletId>,
+    instrument_symbol: InstrumentSymbol,
+}
+
+impl WalletIdsByInstrumentSymbols {
+    pub fn new(instrument_symbol: InstrumentSymbol) -> Self {
+        WalletIdsByInstrumentSymbols {
+            items: Default::default(),
+            instrument_symbol,
+        }
+    }
+
+    pub fn new_with_one(instrument_symbol: InstrumentSymbol, id: WalletId) -> Self {
+        WalletIdsByInstrumentSymbols {
+            items: AHashSet::from([id]),
+            instrument_symbol,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.items.len()
+    }
+}
+
+impl EntityWithKey<InstrumentSymbol> for WalletIdsByInstrumentSymbols {
+    fn get_key(&self) -> &InstrumentSymbol {
+        &self.instrument_symbol
+    }
+}
+
+
 pub struct PositionsMonitor {
     positions_cache: PositionsCache,
-    ids_by_instruments: AHashMap<InstrumentSymbol, AHashSet<PositionId>>,
+    ids_by_instruments: SortedVec<InstrumentSymbol, PositionIdsByInstrumentSymbols>,
     cancel_top_up_delay: Duration,
     cancel_top_up_price_change_percent: f64,
     locked_ids: AHashSet<PositionId>,
     pnl_accuracy: Option<u32>,
     wallets_by_ids: AHashMap<WalletId, Wallet>,
-    wallet_ids_by_instruments: AHashMap<InstrumentSymbol, AHashSet<WalletId>>,
+    wallet_ids_by_instruments: SortedVec<InstrumentSymbol, WalletIdsByInstrumentSymbols>,
 }
 
 impl PositionsMonitor {
@@ -35,12 +98,12 @@ impl PositionsMonitor {
         Self {
             wallets_by_ids: Default::default(),
             positions_cache: PositionsCache::with_capacity(capacity),
-            ids_by_instruments: AHashMap::with_capacity(capacity),
+            ids_by_instruments: SortedVec::new_with_capacity(500),
             cancel_top_up_delay,
             locked_ids: AHashSet::with_capacity(capacity),
             cancel_top_up_price_change_percent,
             pnl_accuracy,
-            wallet_ids_by_instruments: Default::default(),
+            wallet_ids_by_instruments: SortedVec::new_with_capacity(500),
         }
     }
     
@@ -95,7 +158,7 @@ impl PositionsMonitor {
 
             for instrument in position.get_instruments() {
                 if let Some(ids) = self.ids_by_instruments.get_mut(&instrument) {
-                    ids.remove(position.get_id());
+                    ids.items.remove(position.get_id());
                 }
             }
         }
@@ -111,7 +174,7 @@ impl PositionsMonitor {
                 let wallet_ids = self.wallet_ids_by_instruments.get_mut(instrument);
 
                 if let Some(wallet_ids) = wallet_ids {
-                    wallet_ids.remove(wallet_id);
+                    wallet_ids.items.remove(wallet_id);
                 }
             }
 
@@ -126,10 +189,10 @@ impl PositionsMonitor {
             let wallet_ids = self.wallet_ids_by_instruments.get_mut(instrument);
 
             if let Some(wallet_ids) = wallet_ids {
-                wallet_ids.insert(wallet.id.clone());
+                wallet_ids.items.insert(wallet.id.clone());
             } else {
                 self.wallet_ids_by_instruments
-                    .insert(instrument.to_owned(), AHashSet::from([wallet.id.clone()]));
+                    .insert_or_replace(WalletIdsByInstrumentSymbols::new_with_one(instrument.clone(), wallet.id.clone()));
             }
         }
 
@@ -158,10 +221,10 @@ impl PositionsMonitor {
 
         for invest_instrument in instruments {
             if let Some(ids) = self.ids_by_instruments.get_mut(&invest_instrument) {
-                ids.insert(id.clone());
+                ids.items.insert(id.clone());
             } else {
                 self.ids_by_instruments
-                    .insert(invest_instrument, AHashSet::from([id.clone()]));
+                    .insert_or_replace(PositionIdsByInstrumentSymbols::new_with_one(invest_instrument, id.clone()));
             }
         }
 
@@ -215,7 +278,7 @@ impl PositionsMonitor {
         let mut top_up_reserved_by_wallet_ids: AHashMap<WalletId, SortedVec<AssetSymbol, AssetAmount>> =
             AHashMap::with_capacity(position_ids.len() / 2);
 
-        position_ids.retain(|position_id| {
+        position_ids.items.retain(|position_id| {
             if self.locked_ids.contains(position_id) {
                 // skip update
                 return true;
@@ -379,7 +442,7 @@ impl PositionsMonitor {
         let wallet_ids = self.wallet_ids_by_instruments.get_mut(&bidask.instrument);
 
         if let Some(wallet_ids) = wallet_ids {
-            for wallet_id in wallet_ids.iter() {
+            for wallet_id in wallet_ids.items.iter() {
                 let wallet = self
                     .wallets_by_ids
                     .get_mut(wallet_id)
