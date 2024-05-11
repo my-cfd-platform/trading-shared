@@ -279,7 +279,7 @@ impl PositionsMonitor {
         self.positions_cache.get_mut(id)
     }
 
-    fn reset_reused_allocation(&mut self) {
+    fn clear_reused_allocations(&mut self) {
         self.top_up_pnls_by_wallet_ids.clear();
         self.top_up_reserved_by_wallet_ids.clear();
     }
@@ -454,7 +454,7 @@ impl PositionsMonitor {
             }
         }
         
-        self.reset_reused_allocation();
+        self.clear_reused_allocations();
 
         events
     }
