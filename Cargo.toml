@@ -1,6 +1,6 @@
 [package]
 name = "trading-sdk"
-version = "0.19.17-rc"
+version = "0.19.18-rc"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

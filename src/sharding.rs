@@ -1,11 +1,11 @@
-pub fn get_index(s: &str, max: usize) -> usize {
+pub fn get_index(s: &str, count: usize) -> usize {
     let mut result: usize = 0;
 
     for byte in s.bytes().take(8) {
         result = (result << 8) | (byte as usize);
     }
 
-    result % max
+    result % count
 }
 
 #[cfg(test)]
@@ -13,6 +13,18 @@ mod tests {
     use std::collections::HashMap;
     use uuid::Uuid;
     use super::*;
+
+    #[test]
+    fn test_return_zero() {
+        let test_cases = [
+            "hello"
+        ];
+
+        for item in &test_cases {
+            let index = get_index(item, test_cases.len());
+            assert_eq!(index, 0, "Sharding index out of range");
+        }
+    }
 
     #[test]
     fn test_get_index() {
@@ -30,13 +42,12 @@ mod tests {
 
             let sharding_key2 = get_index(input, *max_number);
             assert_eq!(sharding_key, sharding_key2);
-
         }
     }
 
     #[test]
     fn test_index_distribution() {
-        let iterations = 100_000;
+        let iterations = 100000;
         let max_number = 10; // Number of shards
         let deviation_percent = 5;
         let expected_count = iterations / max_number as usize;
@@ -45,9 +56,12 @@ mod tests {
 
         for _i in 0..iterations {
             let input = Uuid::new_v4().to_string();
-            let sharding_key = get_index(&input, max_number);
-            *key_counts.entry(sharding_key).or_insert(0) += 1;
+            let index = get_index(&input, max_number);
+            assert!(index < max_number);
+            *key_counts.entry(index).or_insert(0) += 1;
         }
+
+        println!("{:?}", key_counts);
 
         for count in key_counts.values() {
             assert!(
