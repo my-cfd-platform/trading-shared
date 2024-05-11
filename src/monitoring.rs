@@ -86,6 +86,7 @@ pub struct PositionsMonitor {
     wallets_by_ids: AHashMap<WalletId, Wallet>,
     wallet_ids_by_instruments: SortedVec<InstrumentSymbol, WalletIdsByInstrumentSymbol>,
     wallet_monitoring_enabled: bool,
+    last_update_events_count: usize,
     // reused allocations
     top_up_pnls_by_wallet_ids: AHashMap<WalletId, f64>,
     top_up_reserved_by_wallet_ids: AHashMap<WalletId, SortedVec<AssetSymbol, AssetAmount>>,
@@ -114,6 +115,7 @@ impl PositionsMonitor {
             top_up_pnls_by_wallet_ids: AHashMap::with_capacity(wallet_ids_count),
             top_up_reserved_by_wallet_ids: AHashMap::with_capacity(wallet_ids_count),
             wallet_monitoring_enabled,
+            last_update_events_count: 0,
         }
     }
 
@@ -291,8 +293,8 @@ impl PositionsMonitor {
             return Vec::with_capacity(0);
         };
 
-        let mut events = Vec::with_capacity(position_ids.len() / 20);
-        let wallet_ids_to_remove_count = if self.wallet_monitoring_enabled {self.wallets_by_ids.len() / 10} else {0};
+        let mut events = Vec::with_capacity(self.last_update_events_count + 10);
+        let wallet_ids_to_remove_count = if self.wallet_monitoring_enabled { self.wallets_by_ids.len() / 100 + 10 } else { 0 };
         let mut wallet_ids_to_remove = Vec::with_capacity(wallet_ids_to_remove_count);
 
         position_ids.items.retain(|position_id| {
@@ -455,6 +457,7 @@ impl PositionsMonitor {
         }
         
         self.clear_reused_allocations();
+        self.last_update_events_count = events.len();
 
         events
     }
