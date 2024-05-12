@@ -293,8 +293,8 @@ impl PositionsMonitor {
             return Vec::with_capacity(0);
         };
 
-        let mut events = Vec::with_capacity(self.last_update_events_count + 10);
-        let wallet_ids_to_remove_count = if self.wallet_monitoring_enabled { self.wallets_by_ids.len() / 100 + 10 } else { 0 };
+        let mut events = Vec::with_capacity(self.last_update_events_count / 4 + 10);
+        let wallet_ids_to_remove_count = if self.wallet_monitoring_enabled { self.wallets_by_ids.len() / 1000 + 10 } else { 0 };
         let mut wallet_ids_to_remove = Vec::with_capacity(wallet_ids_to_remove_count);
 
         position_ids.items.retain(|position_id| {
