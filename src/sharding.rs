@@ -1,5 +1,9 @@
 pub fn get_index(s: &str, count: usize) -> usize {
     let mut result: usize = 0;
+    
+    if count <= 1 {
+        return result;
+    }
 
     for byte in s.bytes().take(8) {
         result = (result << 8) | (byte as usize);
