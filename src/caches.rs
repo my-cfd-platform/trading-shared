@@ -123,13 +123,14 @@ impl PositionsCache {
         }
     }
 
-    pub fn get_by_wallet_id(&self, wallet_id: &WalletId) -> Vec<&Position> {
+    pub fn get_by_wallet_id(&self, wallet_id: &WalletId, limit: usize) -> Vec<&Position> {
         let ids = self.ids_by_wallet_ids.get(wallet_id);
 
         if let Some(ids) = ids {
-            let mut positions = Vec::with_capacity(ids.len());
+            let mut positions = Vec::with_capacity(limit);
 
-            for id in ids {
+            for (i, id) in ids.iter().enumerate() {
+                if i > limit { break; }
                 positions.push(self.positions_by_ids.get(id).expect("Error in add method"));
             }
 

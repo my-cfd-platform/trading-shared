@@ -248,8 +248,8 @@ impl PositionsMonitor {
         self.positions_cache.add(position);
     }
 
-    pub fn get_by_wallet_id(&self, wallet_id: &WalletId) -> Vec<&Position> {
-        self.positions_cache.get_by_wallet_id(wallet_id)
+    pub fn get_by_wallet_id(&self, wallet_id: &WalletId, limit: usize) -> Vec<&Position> {
+        self.positions_cache.get_by_wallet_id(wallet_id, limit)
     }
 
     pub fn unlock(&mut self, position_id: &PositionId) {
