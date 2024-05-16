@@ -1,5 +1,5 @@
-use std::fmt::Display;
 use rust_extensions::sorted_vec::EntityWithKey;
+use std::fmt::Display;
 use uuid::Uuid;
 
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
@@ -11,27 +11,51 @@ impl EntityWithKey<PositionId> for PositionId {
     }
 }
 
-impl From<&str> for PositionId {
-    fn from(value: &str) -> Self {
-        PositionId(Uuid::parse_str(value).expect("invalid position id"))
-    }
-}
-
 impl From<Uuid> for PositionId {
     fn from(value: Uuid) -> Self {
         PositionId(value)
     }
 }
 
-impl From<&String> for PositionId {
-    fn from(value: &String) -> Self {
-        PositionId(Uuid::parse_str(value).expect("invalid position id"))
+impl TryFrom<&str> for PositionId {
+    type Error = String;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        let uuid = Uuid::try_parse(value);
+
+        let Ok(uuid) = uuid else {
+            return Err(uuid.unwrap_err().to_string());
+        };
+
+        Ok(PositionId(uuid))
     }
 }
 
-impl From<String> for PositionId {
-    fn from(value: String) -> Self {
-        PositionId(Uuid::parse_str(&value).expect("invalid position id"))
+impl TryFrom<&String> for PositionId {
+    type Error = String;
+
+    fn try_from(value: &String) -> Result<Self, Self::Error> {
+        let uuid = Uuid::try_parse(value);
+
+        let Ok(uuid) = uuid else {
+            return Err(uuid.unwrap_err().to_string());
+        };
+
+        Ok(PositionId(uuid))
+    }
+}
+
+impl TryFrom<String> for PositionId {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let uuid = Uuid::try_parse(&value);
+
+        let Ok(uuid) = uuid else {
+            return Err(uuid.unwrap_err().to_string());
+        };
+
+        Ok(PositionId(uuid))
     }
 }
 
