@@ -130,7 +130,7 @@ impl PositionsCache {
             let mut positions = Vec::with_capacity(limit);
 
             for (i, id) in ids.iter().enumerate() {
-                if i > limit { break; }
+                if i >= limit { break; }
                 positions.push(self.positions_by_ids.get(id).expect("Error in add method"));
             }
 
@@ -172,6 +172,7 @@ mod tests {
     use rust_extensions::sorted_vec::SortedVec;
     use uuid::Uuid;
     use crate::assets::{AssetAmount, AssetPrice};
+    use crate::wallet_id::WalletId;
 
     #[test]
     fn positions_cache_is_empty() {
@@ -200,7 +201,7 @@ mod tests {
         assert!(!cache.is_empty());
 
         cache.remove(position.get_id());
-        let positions = cache.get_by_wallet_id(&order.wallet_id);
+        let positions = cache.get_by_wallet_id(&order.wallet_id, 1);
 
         assert_eq!(positions.len(), 0);
         assert!(cache.is_empty());
@@ -213,9 +214,29 @@ mod tests {
 
         cache.add(position.clone());
         let order = position.get_order();
-        let positions = cache.get_by_wallet_id(&order.wallet_id);
+        let positions = cache.get_by_wallet_id(&order.wallet_id, 1);
 
         assert!(!positions.is_empty());
+    }
+
+    #[test]
+    fn positions_cache_get_by_wallet_with_limit() {
+        let count = 10;
+        let mut cache = PositionsCache::with_capacity(count);
+        let limit = 1;
+        let wallet_id: WalletId = Uuid::new_v4().into();
+        let position = new_position_with_wallet(&wallet_id);
+        let wallet_id = position.get_order().wallet_id.clone();
+        cache.add(position.clone());
+
+        for _i in 0..count-1 {
+            cache.add(new_position_with_wallet(&wallet_id));
+        }
+        
+        let positions = cache.get_by_wallet_id(&wallet_id, limit);
+        
+        assert_eq!(cache.count(), count);
+        assert_eq!(positions.len(), limit);
     }
 
     fn new_position() -> Position {
@@ -227,6 +248,40 @@ mod tests {
             instrument: "ATOMUSDT".into(),
             trader_id: "test".to_string(),
             wallet_id: Uuid::new_v4().into(),
+            created_date: DateTimeAsMicroseconds::now(),
+            desire_price: None,
+            funding_fee_period: None,
+            invest_assets,
+            leverage: 1.0,
+            side: crate::orders::OrderSide::Buy,
+            take_profit: None,
+            stop_loss: None,
+            stop_out_percent: 10.0,
+            margin_call_percent: 10.0,
+            top_up_enabled: false,
+            top_up_percent: 10.0,
+        };
+        let mut prices = SortedVec::new();
+        prices.insert_or_replace(AssetPrice {price: 22300.0, symbol: "BTC".into()});
+        let bidask = BidAsk {
+            ask: 14.748,
+            bid: 14.748,
+            datetime: DateTimeAsMicroseconds::now(),
+            instrument: "ATOMUSDT".into(),
+        };
+
+        order.open(&bidask, &prices)
+    }
+
+    fn new_position_with_wallet(wallet_id: &WalletId) -> Position {
+        let mut invest_assets = SortedVec::new();
+        invest_assets.insert_or_replace(AssetAmount {amount: 100.0, symbol: "BTC".into()});
+        let order = Order {
+            base_asset: "USDT".into(),
+            id: "test".to_string(),
+            instrument: "ATOMUSDT".into(),
+            trader_id: "test".to_string(),
+            wallet_id: wallet_id.to_owned(),
             created_date: DateTimeAsMicroseconds::now(),
             desire_price: None,
             funding_fee_period: None,
