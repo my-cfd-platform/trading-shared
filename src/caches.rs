@@ -129,8 +129,7 @@ impl PositionsCache {
         if let Some(ids) = ids {
             let mut positions = Vec::with_capacity(limit);
 
-            for (i, id) in ids.iter().enumerate() {
-                if i >= limit { break; }
+            for id in ids.iter().take(limit) {
                 positions.push(self.positions_by_ids.get(id).expect("Error in add method"));
             }
 
