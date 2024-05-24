@@ -101,14 +101,14 @@ impl PositionsMonitor {
         wallet_monitoring_enabled: bool,
     ) -> Self {
         let instruments_count = 500;
-        let wallet_ids_count = capacity / 5;
+        let wallet_ids_count = capacity / 20;
 
         Self {
             wallets_by_ids: AHashMap::with_capacity(wallet_ids_count),
             positions_cache: PositionsCache::with_capacity(capacity),
             ids_by_instruments: SortedVec::new_with_capacity(instruments_count),
             cancel_top_up_delay,
-            locked_ids: SortedVec::new_with_capacity(capacity / 20),
+            locked_ids: SortedVec::new_with_capacity(capacity / 1000),
             cancel_top_up_price_change_percent,
             pnl_accuracy,
             wallet_ids_by_instruments: SortedVec::new_with_capacity(instruments_count),
